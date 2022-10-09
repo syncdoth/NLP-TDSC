@@ -17,7 +17,7 @@ def get_MNIST_datasets(data_path="./data/", transform=None):
     data_test = datasets.MNIST(root=data_path, transform=transform, train=False, download=True)
     return {'train': data_train, 'test': data_test}
 
-def get_MNIST_dataloaders(MNIST_data, train_valid_split=[50000, 10000], batch_size=32, seed=2022, num_workers=4):
+def get_MNIST_dataloaders(MNIST_data, train_valid_split=(50000, 10000), batch_size=32, seed=2022, num_workers=4):
     """ Get MNIST dataloaders, including splitting the original train set into train and validation sets.
     """
     train_data, valid_data = torch.utils.data.random_split(MNIST_data['train'], train_valid_split, 
