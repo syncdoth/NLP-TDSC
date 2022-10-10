@@ -29,10 +29,6 @@ def options():
                         default=0,
                         help='decay lr after x epochs. 0 means to use ReduceLrOnPlateau')
     parser.add_argument('--lr_decay_rate', type=float, default=0.8, help='how much to decay lr')
-    parser.add_argument('--patience',
-                        type=int,
-                        default=3,
-                        help='how many epochs to wait until reducing lr; used in ReduceLROnPlateau')
     # extra
     parser.add_argument('--seed', type=int, default=2022, help="the random seed")
     parser.add_argument('--verbose', action='store_true', help='whether to print results a lot')
