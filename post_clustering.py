@@ -8,6 +8,7 @@ nmi = normalized_mutual_info_score
 ami = adjusted_mutual_info_score
 ari = adjusted_rand_score
 
+from IPython import embed
 
 def acc(y_true, y_pred):
     """

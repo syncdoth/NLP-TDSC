@@ -12,7 +12,6 @@ from train import train
 from model import FooModel, create_MLP
 from IPython import embed
 
-
 def options():
     """
     add command line options here
@@ -31,6 +30,7 @@ def options():
                         help='decay lr after x epochs. 0 means to use ReduceLrOnPlateau')
     parser.add_argument('--subspace_loss_lambda', type=float, default=0.01)
     parser.add_argument('--lr_decay_rate', type=float, default=0.8, help='how much to decay lr')
+    parser.add_argument('--num_samples', type=int, default=1000)
     # extra
     parser.add_argument('--seed', type=int, default=2022, help="the random seed")
     parser.add_argument('--verbose', action='store_true', help='whether to print results a lot')
@@ -49,16 +49,15 @@ def main():
     set_random_seeds(args.seed)
 
     MNIST_data = get_MNIST_datasets()
-    dataloaders = get_MNIST_dataloaders(MNIST_data, batch_size=args.batch_size, seed=args.seed)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    encoder = create_MLP(28*28, 128, 64, 1)
-    decoder = create_MLP(128, 28*28, 64, 1)
-    model = FooModel(encoder, decoder, 128) 
-
+    encoder = create_MLP(28*28, 16, 64, 1)
+    decoder = create_MLP(16, 28*28, 64, 1)
+    model = FooModel(encoder, decoder, args.num_samples) 
     loss_fn = lambda x, x_hat: (x-x_hat).square().sum(dim=-1).mean() # reconstruction loss
-    train(model, dataloaders, loss_fn, args, device=device)
+
+    train(model, MNIST_data, loss_fn, args, device=device)
 
 
 if __name__ == '__main__':

@@ -5,7 +5,7 @@ Contains the implementation of models
 from symbol import factor
 from torch import nn
 import torch
-
+from IPython import embed
 
 class Kfactor(nn.Module):
     """
@@ -58,26 +58,41 @@ class Kfactor(nn.Module):
         return loss
 
 
+class SelfExpression(nn.Module):
+
+    def __init__(self, num_samples):
+
+        super().__init__()
+
+        self.C = nn.Parameter(1.0e-8 * torch.ones(num_samples, num_samples, dtype=torch.float32), requires_grad=True)
+
+    def forward(self, x):
+
+        y = self.C @ x - torch.diag(self.C).reshape(-1, 1) * x
+
+        return y
+
+
 class FooModel(nn.Module):
     """
     This is a "foo" model, i.e., just an example of pytorch model.
     """
 
-    def __init__(self, encoder, decoder, factor_dim=128):
+    def __init__(self, encoder, decoder, num_samples):
         super().__init__()
         self.encoder = encoder
         self.decoder = decoder
-        self.self_exp = Kfactor(10, factor_dim=factor_dim, factor_num_per_cluster=16)
-        self.self_exp.upadte_DTD_inv()
+        self.self_exp = SelfExpression(num_samples)
 
     def forward(self, x):
 
         z = self.encoder(x)
         x_hat = self.decoder(z)
-        C, label = self.self_exp(z)
-        subspace_loss = self.self_exp.compute_subsapce_loss(z, C, label)
+        z_hat = self.self_exp(z)
 
-        return x_hat, label, subspace_loss
+        subspace_loss = (z-z_hat).square().sum(dim=1).mean()
+
+        return x_hat, subspace_loss
 
 
 def create_MLP(input_dim, output_dim, latent_dim, layer_num, add_BN=True):

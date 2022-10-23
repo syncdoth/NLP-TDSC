@@ -17,9 +17,11 @@ from evaluate import evaluate
 from IPython import embed
 import os
 
+from post_clustering import spectral_clustering, acc
+
 
 def train(model: nn.Module,
-          dataloaders: Dict[str, torch.utils.data.DataLoader],
+          data,
           loss_fn,
           args,
           device='cpu'):
@@ -56,43 +58,35 @@ def train(model: nn.Module,
     best_valid_acc = 0
 
     since = time.time()
-    for epoch in range(args.n_epochs):
 
+
+
+    train_data = data['train'].train_data.reshape(-1, 28*28) / 255
+
+    perm = torch.randperm(train_data.shape[0])
+    index = perm[:args.num_samples]
+    inputs = train_data[index].float().to(device)
+    labels = data['train'].train_labels[index].numpy()
+
+    for epoch in tqdm(range(args.n_epochs)):
         model.train()
         sample_count = 0
         running_loss = 0
         running_acc = 0
 
-        if args.verbose:
-            logging.info(f'\nEpoch {epoch + 1}/{args.n_epochs}:\n')
-            # tqdm for process (rank) 0 only when using distributed training
-            train_dataloader = tqdm(dataloaders['train'])
-        else:
-            train_dataloader = dataloaders['train']
-
-        for i, (inputs, labels) in enumerate(train_dataloader):
-            inputs = inputs.float().to(device).reshape(-1, 28*28)
-            labels = labels.to(device)
-
-            optimizer.zero_grad()
-            xhat, yhat, subspace_loss = model(inputs)
-
-            reconstruction_loss = loss_fn(xhat, inputs)
-            loss = reconstruction_loss + subspace_loss * args.subspace_loss_lambda
-            loss.backward()
-            optimizer.step()
-            model.self_exp.upadte_DTD_inv()
-
-            sample_count += inputs.size(0)
-            running_loss += loss.item() * inputs.size(0)  # smaller batches count less
-            running_acc += (yhat == labels).sum().item()  # num corrects
-
-        epoch_train_loss = running_loss / sample_count
-        epoch_train_acc = running_acc / sample_count
-
+        optimizer.zero_grad()
+        xhat, subspace_loss = model(inputs)
+        reconstruction_loss = loss_fn(xhat, inputs)
+        loss = reconstruction_loss + subspace_loss * args.subspace_loss_lambda
+        loss.backward()
+        optimizer.step()
         lr_decay.step()
 
-        print( f'\n[Train] loss: {epoch_train_loss:.4f} - acc: {epoch_train_acc:.4f}')
+        if epoch % 100 == 0:
+            C = model.self_exp.C.data.cpu().numpy()
+            y_pred = spectral_clustering(C, 10, 16, 0.04, 8)
+            accuracy = acc(labels, y_pred)
+            print( f'\n[Train] loss: {loss.item():.4f} | Acc: {accuracy:.4f}')
 
         # if args.verbose:  # only validate using process 0
         #     if epoch_valid_loss is None:  # check if process 0 already validated

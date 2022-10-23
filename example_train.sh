@@ -1,7 +1,7 @@
 #/bin/bash
 
 python main.py \
-    --n_epochs 10 \
+    --n_epochs 1000 \
     --batch_size 128 \
     --optimizer adam \
     --weight_decay 0.01 \
@@ -13,3 +13,4 @@ python main.py \
     --verbose \
     --subspace_loss_lambda 0.01 \
     --decay_steps  1 \
+    --num_samples 1000
