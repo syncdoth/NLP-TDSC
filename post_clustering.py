@@ -74,8 +74,7 @@ def post_proC(C, K, d, ro):
     L = np.abs(Z ** ro)
     L = L / L.max()
     L = 0.5 * (L + L.T)
-    spectral = cluster.SpectralClustering(n_clusters=K, eigen_solver='arpack', affinity='precomputed',
-                                          assign_labels='discretize')
+    spectral = cluster.SpectralClustering(n_clusters=K, eigen_solver='arpack', affinity='precomputed', assign_labels='discretize')
     spectral.fit(L)
     grp = spectral.fit_predict(L)
     return grp, L

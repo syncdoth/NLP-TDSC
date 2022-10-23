@@ -9,7 +9,8 @@ import torch
 from util import set_random_seeds
 from data import get_MNIST_datasets, get_MNIST_dataloaders
 from train import train
-from model import FooModel
+from model import FooModel, create_MLP
+from IPython import embed
 
 
 def options():
@@ -28,6 +29,7 @@ def options():
                         type=int,
                         default=0,
                         help='decay lr after x epochs. 0 means to use ReduceLrOnPlateau')
+    parser.add_argument('--subspace_loss_lambda', type=float, default=0.01)
     parser.add_argument('--lr_decay_rate', type=float, default=0.8, help='how much to decay lr')
     # extra
     parser.add_argument('--seed', type=int, default=2022, help="the random seed")
@@ -50,10 +52,12 @@ def main():
     dataloaders = get_MNIST_dataloaders(MNIST_data, batch_size=args.batch_size, seed=args.seed)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    model = FooModel()  # TODO: change FooModel to actual model
 
-    # TODO: add more init & control here
-    loss_fn = torch.nn.CrossEntropyLoss()  # TODO: change loss_fn.
+    encoder = create_MLP(28*28, 128, 64, 1)
+    decoder = create_MLP(128, 28*28, 64, 1)
+    model = FooModel(encoder, decoder, 128) 
+
+    loss_fn = lambda x, x_hat: (x-x_hat).square().sum(dim=-1).mean() # reconstruction loss
     train(model, dataloaders, loss_fn, args, device=device)
 
 

@@ -14,6 +14,9 @@ from tqdm import tqdm
 
 from evaluate import evaluate
 
+from IPython import embed
+import os
+
 
 def train(model: nn.Module,
           dataloaders: Dict[str, torch.utils.data.DataLoader],
@@ -68,65 +71,59 @@ def train(model: nn.Module,
             train_dataloader = dataloaders['train']
 
         for i, (inputs, labels) in enumerate(train_dataloader):
-            inputs = inputs.float().to(device)
+            inputs = inputs.float().to(device).reshape(-1, 28*28)
             labels = labels.to(device)
 
             optimizer.zero_grad()
-            yhat = model(inputs)
+            xhat, yhat, subspace_loss = model(inputs)
 
-            loss = loss_fn(yhat, labels)
+            reconstruction_loss = loss_fn(xhat, inputs)
+            loss = reconstruction_loss + subspace_loss * args.subspace_loss_lambda
             loss.backward()
-            # torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
             optimizer.step()
+            model.self_exp.upadte_DTD_inv()
 
             sample_count += inputs.size(0)
             running_loss += loss.item() * inputs.size(0)  # smaller batches count less
-            running_acc += (yhat.argmax(-1) == labels).sum().item()  # num corrects
+            running_acc += (yhat == labels).sum().item()  # num corrects
 
         epoch_train_loss = running_loss / sample_count
         epoch_train_acc = running_acc / sample_count
 
-        # reduce lr
-        if args.decay_steps > 0:
-            lr_decay.step()
-        else:  # reduce on plateau, evaluate to keep track of acc in each process
-            epoch_valid_loss, epoch_valid_acc = evaluate(model,
-                                                         dataloaders['valid'],
-                                                         loss_fn,
-                                                         args,
-                                                         device=device)
-            lr_decay.step(epoch_valid_acc[0])
+        lr_decay.step()
 
-        if args.verbose:  # only validate using process 0
-            if epoch_valid_loss is None:  # check if process 0 already validated
-                epoch_valid_loss, epoch_valid_acc = evaluate(model,
-                                                             dataloaders['valid'],
-                                                             loss_fn,
-                                                             args,
-                                                             device=device)
+        print( f'\n[Train] loss: {epoch_train_loss:.4f} - acc: {epoch_train_acc:.4f}')
 
-            logging.info(f'\n[Train] loss: {epoch_train_loss:.4f} - acc: {epoch_train_acc:.4f} |'
-                         f' [Valid] loss: {epoch_valid_loss:.4f} - acc: {epoch_valid_acc:.4f}')
+        # if args.verbose:  # only validate using process 0
+        #     if epoch_valid_loss is None:  # check if process 0 already validated
+        #         epoch_valid_loss, epoch_valid_acc = evaluate(model,
+        #                                                      dataloaders['valid'],
+        #                                                      loss_fn,
+        #                                                      args,
+        #                                                      device=device)
+
+        #     logging.info(
+        #         f'\n[Train] loss: {epoch_train_loss:.4f} - acc: {epoch_train_acc:.4f} | [Valid] loss: {epoch_valid_loss:.4f} - acc: {epoch_valid_acc:.4f}')
 
             # save model and early stopping
-            if epoch_valid_acc >= best_valid_acc:
-                best_epoch = epoch + 1
-                best_valid_acc = epoch_valid_acc
-                best_valid_loss = epoch_valid_loss
-                # saving using process (rank) 0 only as all processes are in sync
-                torch.save(model.state_dict(), args.checkpoint_dir)
-            epoch_valid_loss = None  # reset loss
+            # if epoch_valid_acc >= best_valid_acc:
+            #     best_epoch = epoch + 1
+            #     best_valid_acc = epoch_valid_acc
+            #     best_valid_loss = epoch_valid_loss
+            #     # saving using process (rank) 0 only as all processes are in sync
+            #     torch.save(model.state_dict(), args.checkpoint_dir)
+            # epoch_valid_loss = None  # reset loss
 
         gc.collect()  # release unreferenced memory
 
-    if args.verbose:
-        time_elapsed = time.time() - since
-        logging.info(f'\nTraining time: {time_elapsed // 60:.0f}m {time_elapsed % 60:.0f}s')
+    # if args.verbose:
+    #     time_elapsed = time.time() - since
+    #     logging.info(f'\nTraining time: {time_elapsed // 60:.0f}m {time_elapsed % 60:.0f}s')
 
-        model.load_state_dict(torch.load(args.checkpoint_dir))  # load best model
+    #     model.load_state_dict(torch.load(args.checkpoint_dir))  # load best model
 
-        test_loss, test_acc = evaluate(model, dataloaders['test'], loss_fn, args, device=device)
+    #     test_loss, test_acc = evaluate(model, dataloaders['test'], loss_fn, args, device=device)
 
-        logging.info(f'\nBest [Valid] | epoch: {best_epoch} - loss: {best_valid_loss:.4f} '
-                     f'- acc: {best_valid_acc:.4f}')
-        logging.info(f'[Test] loss {test_loss:.4f} - acc: {test_acc:.4f}')
+    #     logging.info(f'\nBest [Valid] | epoch: {best_epoch} - loss: {best_valid_loss:.4f} - acc: {best_valid_acc:.4f}')
+    #     logging.info(f'[Test] loss {test_loss:.4f} - acc: {test_acc:.4f}')
+
