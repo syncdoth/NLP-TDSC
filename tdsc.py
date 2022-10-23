@@ -3,12 +3,19 @@ Contains the implementation of TDSC
 Reference: https://github.com/XifengGuo/DSC-Net/blob/master/main.py
 """
 
+import argparse
+import math
+import os
+import warnings
+
+import numpy as np
+import scipy.io as sio
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
-import scipy.io as sio
-import math
+from torch import optim
+
+from post_clustering import acc, nmi, spectral_clustering
 
 
 class Conv2dSamePad(nn.Module):
@@ -130,14 +137,14 @@ class TDSCNet(nn.Module):
             # (triplet) self-expression loss
             loss_selfExp += F.mse_loss(z_recon[key], z[key], reduction='sum')
 
-        loss = loss_ae + weight['c']*loss_coef + weight['se']*loss_selfExp + weight['tri']*loss_triplet
+        loss = loss_ae + weights['c']*loss_coef + weights['se']*loss_selfExp + weights['tri']*loss_triplet
         return loss
 
 
-def tdscnet_train(model,  # type: TDSCNet, y can be ground truth or unsup
+def tdscnet_train(model,
             x, y, y_unsup, epochs, lr=1e-3, weights={'c':1.0,'se':150,'tri':1.0}, device='cuda',
             alpha=0.04, dim_subspace=12, ro=8, show=10):
-    
+
     optimizer = optim.Adam(model.parameters(), lr=lr)
     if not isinstance(x, torch.Tensor):
         x = torch.tensor(x, dtype=torch.float32, device=device)
@@ -163,10 +170,6 @@ def tdscnet_train(model,  # type: TDSCNet, y can be ground truth or unsup
     return y_pred   # for the next unsupervised training pass
 
 def tdscnet_experiments():
-    import argparse
-    import warnings
-    import os
-
     parser = argparse.ArgumentParser(description='TDSCNet')
     parser.add_argument('--db', default='coil20',
                         choices=['coil20', 'coil100', 'orl', 'reuters10k', 'stl'])
@@ -245,6 +248,6 @@ def tdscnet_experiments():
     tdscnet.ae.load_state_dict(ae_state_dict)
     print("Pretrained ae weights are loaded successfully.")
 
-    train(tdscnet, x, y, y, epochs, weights=weights,
+    tdscnet_train(tdscnet, x, y, y, epochs, weights=weights,
           alpha=alpha, dim_subspace=dim_subspace, ro=ro, show=args.show_freq, device=device)
     torch.save(tdscnet.state_dict(), args.save_dir + '/%s-model.ckp' % args.db)

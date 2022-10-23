@@ -76,7 +76,6 @@ def train(model: nn.Module,
 
     best_valid_loss = np.inf
     best_valid_acc = 0
-    patience_counter = 0
 
     index = np.shuffle(range(num_training_samples))
     # train_dataloader = tokenized_data['train'][0]
@@ -182,20 +181,11 @@ def train(model: nn.Module,
 
             # save model and early stopping
             if epoch_valid_acc >= best_valid_acc:
-                patience_counter = 0
                 best_epoch = epoch + 1
                 best_valid_acc = epoch_valid_acc
                 best_valid_loss = epoch_valid_loss
                 # saving using process (rank) 0 only as all processes are in sync
                 torch.save(model.state_dict(), args.checkpoint_dir)
-            else:
-                patience_counter += 1
-                if patience_counter == (args.patience - 10):
-                    logging.info(f'\nPatience counter {patience_counter}/{args.patience}.')
-                elif patience_counter == args.patience:
-                    logging.info(
-                        f'\nEarly stopping... no improvement after {args.patience} Epochs.')
-                    break
             epoch_valid_loss = None  # reset loss
 
         gc.collect()  # release unreferenced memory
