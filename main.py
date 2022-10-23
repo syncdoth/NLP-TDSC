@@ -2,14 +2,16 @@
 The main file to run experiments.
 """
 
+import os
 import argparse
-
 import torch
+import pandas as pd
+from transformers import AutoTokenizer
 
 from util import set_random_seeds
 from data import get_MNIST_datasets, get_MNIST_dataloaders
 from train import train
-from model import FooModel
+from model import TdscLanguageModel
 
 
 def options():
@@ -18,6 +20,9 @@ def options():
     """
     parser = argparse.ArgumentParser()
     # add arguments
+    # model related
+    # TODO: scan through this repo to find args._model_related_flag_
+
     # training / optimization related
     parser.add_argument('--n_epochs', type=int, default=10, help='number of times to train')
     parser.add_argument('--batch_size', type=int, default=32)
@@ -42,23 +47,38 @@ def options():
                         help='where to save the model')
 
     args = parser.parse_args()
-
     return args
 
 
 def main():
     args = options()
     set_random_seeds(args.seed)
-
-    MNIST_data = get_MNIST_datasets()
-    dataloaders = get_MNIST_dataloaders(MNIST_data, batch_size=args.batch_size, seed=args.seed)
-
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    model = FooModel()  # TODO: change FooModel to actual model
+
+    # load model, tokenizer
+    model = TdscLanguageModel(args=args).to(device)
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
+
+    # load data
+    # process data to a dict {'input_ids': input_ids (for all training sample)}
+    # so that we can form the triplet data easily, by calling train_data = [data[Da, Dp, Dn] for D.. in batches]
+    # should keep 'text' and 'label' on each dataset
+    tokenized_data = {}     # split: (data, label, n_samples)
+    
+    for split in ['train', 'valid', 'test']:
+        data =  pd.read_csv(os.path.join(agrs.data_path, split+'.csv'))[['text','label']] \
+        tokenized_data[split] = [
+            tokenizer(data[split]['text'], 
+                    padding=args.padding_strategy, 
+                    max_length=args.max_seq_length, 
+                    truncation=True),
+            data[split]['label'],
+            len(data[split]['label'])
+        ]
 
     # TODO: add more init & control here
     loss_fn = torch.nn.CrossEntropyLoss()  # TODO: change loss_fn.
-    train(model, dataloaders, loss_fn, args, device=device)
+    train(model, tokenized_data, loss_fn, args, device=device, mode=['unsup'])
 
 
 if __name__ == '__main__':

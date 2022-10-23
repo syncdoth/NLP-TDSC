@@ -14,6 +14,7 @@ def evaluate(model, dataloader, loss_fn, args, device='cpu'):
     sample_count = 0
     running_loss = 0
     running_acc = 0
+    # TODO: add other metric, e.g AUC, Macro F1
 
     with torch.no_grad():
 

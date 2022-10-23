@@ -16,15 +16,40 @@ from evaluate import evaluate
 
 
 def train(model: nn.Module,
-          dataloaders: Dict[str, torch.utils.data.DataLoader],
+          tokenized_data,
           loss_fn,
           args,
-          device='cpu'):
+          device='cpu',
+          training_modes=['unsup', 'nlp']):
     """ Trains a given model and dataset.
 
     obtained and adapted from:
     https://github.com/fabio-deep/Distributed-Pytorch-Boilerplate/blob/master/src/train.py
     """
+
+    ''' training_modes
+
+    check training_modes only contains options from the following:
+    'unsup': unsupervised training (including triplet loss, self expression loss, ...),
+        output can be used as classification result,
+    'sup': usual supervised training, may call this mode after 'unsup' training to correct model's prediction
+    'nlp': some NLP pretraining tasks, as substitutions for Reconstruction Task
+
+    Note that if we only train on unsup mode, the model will collapse to constant function
+    So we recommend to have 'sup' or 'nlp' in training_modes
+
+    '''
+    num_training_samples = tokenized_data['train'][2]
+
+    if set(mode).difference(['unsup', 'sup', 'nlp']):
+        raise NotImplementedError(f'Not support {set(mode).difference(['unsup', 'sup', 'nlp'])} training modes')
+    if 'unsup' in mode:
+        # initialize unsup labels to construct Triplet Dataset
+        unsup_labels = torch.empty(num_training_samples, dtype=torch.int8).random_(args.num_unsup_clusters)
+        latent_embs_for_clustering = []  # for clustering
+
+    # TODO: load tokenized_data['valid'] and tokenized_data['test'] by dataloader
+    # or modify evaluate() function
 
     # optimizers
     if args.optimizer == 'adam':
@@ -53,8 +78,18 @@ def train(model: nn.Module,
     best_valid_acc = 0
     patience_counter = 0
 
+    index = np.shuffle(range(num_training_samples))
+    # train_dataloader = tokenized_data['train'][0]
+    num_steps_per_epoch = (num_training_samples-1)//args.batch_size + 1
+
     since = time.time()
     for epoch in range(args.n_epochs):
+        # TODO: form training data by index list: index = np.shuffle(range(num_training_samples)), then split by batch
+        # in training loop, just take data and labels by index
+        if 'unsup' in mode:
+            # TODO: call function implemented by Arman. D has 3 keys, ['anchor', 'pos', 'neg']
+            # D['anchor'] should be range(num_training_samples)
+            D = get_triplet_data(num_training_samples, unsup_labels)    
 
         model.train()
         sample_count = 0
@@ -63,36 +98,72 @@ def train(model: nn.Module,
 
         if args.verbose:
             logging.info(f'\nEpoch {epoch + 1}/{args.n_epochs}:\n')
-            # tqdm for process (rank) 0 only when using distributed training
-            train_dataloader = tqdm(dataloaders['train'])
-        else:
-            train_dataloader = dataloaders['train']
 
-        for i, (inputs, labels) in enumerate(train_dataloader):
-            inputs = inputs.float().to(device)
-            labels = labels.to(device)
-
+        for i in tqdm(range(num_steps_per_epoch), position=0, total=num_steps_per_epoch):
+            # beginning and ending index for this batch
+            b, e = i*args.batch_size, min((i+1)*args.batch_size, num_training_samples)
             optimizer.zero_grad()
-            yhat = model(inputs)
 
-            loss = loss_fn(yhat, labels)
-            loss.backward()
-            # torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
-            optimizer.step()
+            # retrieve data
+            if 'unsup' in mode:
+                embs = {}
+                loss = 0
+                for s in ['anchor', 'pos', 'neg']:
+                    idx = D[s][index[i]]    # index in this batch
+                    input_ids = tokenized_data['train'][0]['input_ids'][idx].to(device)
+                    attention_mask = tokenized_data['train'][0]['attention_mask'][idx].to(device)
+                    embs[s] = model.get_lm_embedding(input_ids, attention_mask)
+                    if s == 'anchor':
+                        latent_embs_for_clustering.extend(np.array(embs))   # to make a non-gradient copy of embs
 
-            sample_count += inputs.size(0)
-            running_loss += loss.item() * inputs.size(0)  # smaller batches count less
-            running_acc += (yhat.argmax(-1) == labels).sum().item()  # num corrects
+                    if 'sup' in mode:
+                        labels = tokenized_data['train'][1][idx].to(device)
+                        logits = model.classifier(embs[s])
+                        sup_loss = loss_fn(logits, labels)
+                        loss += sup_loss
+
+                        sample_count += input_ids.size(0)
+                        running_loss += loss.item() * input_ids.size(0)  # smaller batches count less
+                        running_acc += (yhat.argmax(-1) == labels).sum().item()  # num corrects
+
+                # unsup loss, including Triplet Loss and Self Expression Loss
+                unsup_loss = get_unsup_loss(embs)
+                loss += unsup_loss
+
+                loss.backward()
+                optimizer.step()
+
+            if 'sup' in mode:
+                idx = index[i]
+                input_ids = tokenized_data['train'][0]['input_ids'][].to(device)
+                attention_mask = tokenized_data['train'][0]['attention_mask'][idx].to(device)
+                labels = tokenized_data['train'][1][idx].to(device)
+
+                embs = model.get_lm_embedding(input_ids, attention_mask)
+                logits = model.classifier(embs)
+
+                loss = loss_fn(logits, labels)
+                loss.backward()
+                # torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
+                optimizer.step()
+
+                sample_count += input_ids.size(0)
+                running_loss += loss.item() * input_ids.size(0)  # smaller batches count less
+                running_acc += (yhat.argmax(-1) == labels).sum().item()  # num corrects
 
         epoch_train_loss = running_loss / sample_count
         epoch_train_acc = running_acc / sample_count
+
+        # update unsup labels
+        train_unsup_labels = update_unsup_labels(latent_embs_for_clustering, method='emb or affinity matrix?')
+        latent_embs_for_clustering= []
 
         # reduce lr
         if args.decay_steps > 0:
             lr_decay.step()
         else:  # reduce on plateau, evaluate to keep track of acc in each process
             epoch_valid_loss, epoch_valid_acc = evaluate(model,
-                                                         dataloaders['valid'],
+                                                         tokenized_data['valid'],
                                                          loss_fn,
                                                          args,
                                                          device=device)
@@ -101,7 +172,7 @@ def train(model: nn.Module,
         if args.verbose:  # only validate using process 0
             if epoch_valid_loss is None:  # check if process 0 already validated
                 epoch_valid_loss, epoch_valid_acc = evaluate(model,
-                                                             dataloaders['valid'],
+                                                             tokenized_data['valid'],
                                                              loss_fn,
                                                              args,
                                                              device=device)
@@ -135,7 +206,7 @@ def train(model: nn.Module,
 
         model.load_state_dict(torch.load(args.checkpoint_dir))  # load best model
 
-        test_loss, test_acc = evaluate(model, dataloaders['test'], loss_fn, args, device=device)
+        test_loss, test_acc = evaluate(model, tokenized_data['test'], loss_fn, args, device=device)
 
         logging.info(f'\nBest [Valid] | epoch: {best_epoch} - loss: {best_valid_loss:.4f} '
                      f'- acc: {best_valid_acc:.4f}')
