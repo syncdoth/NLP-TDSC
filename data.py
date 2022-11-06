@@ -2,13 +2,14 @@
 # Jiayang Cheng
 
 import torch
-from torchvision import datasets, transforms
+from torchvision import transforms
 
 def get_MNIST_datasets(data_path="./data/", transform=None):
     """ Retrieve the MNIST data. (which DO NOT have a validation set)
     This function will automatically download MNIST data under the ``data_path'' folder.
     The default tranform for the images are used if transform is specified as None.
     """
+    from torchvision import datasets
     if transform is None:
         # Normalize with the global mean and standard deviation of the MNIST dataset
         transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=[0.1307],std=[0.3081])])
@@ -38,8 +39,18 @@ def get_GLUE_datasets(dataset_name='sst2'):
     https://huggingface.co/datasets/glue
     """
     from datasets import load_dataset
+    from datasets import Dataset
     glue_dataset = load_dataset("glue", dataset_name)
-    return dict(glue_dataset)
+    glue_dataset = dict(glue_dataset)
+    # preprocess, normalize the column name into 'text' and 'label' for each split
+    # Currently support: sst2
+    if dataset_name == 'sst2':
+        glue_dataset = {split_name: Dataset.from_dict({'text': glue_dataset[split_name]['sentence'], 
+                                                'label': glue_dataset[split_name]['label']}) 
+                                                for split_name in glue_dataset}
+    else:
+        raise TypeError('Wrong dataset name!')
+    return glue_dataset
 
 def get_GLUE_dataloaders(glue_dataset, train_batch_size=8, eval_batch_size=32, num_workers=4):
     """ Get GLUE dataloaders for a given GLUE dataset (the returned dict from ``get_GLUE_datasets'').
