@@ -38,7 +38,7 @@ def get_MNIST_dataloaders(MNIST_data, train_valid_split=(50000, 10000),
 
     return data_loaders
 
-def get_GLUE_datasets(dataset_name='sst2'):
+def get_GLUE_datasets(dataset_name='sst2', tokenizer=None, max_seq_length=None):
     """ Retrieve the given NLP dataset from the GLUE collection.
     See this webpage for dataset descriptions:
     https://huggingface.co/datasets/glue
@@ -50,9 +50,22 @@ def get_GLUE_datasets(dataset_name='sst2'):
     # preprocess, normalize the column name into 'text' and 'label' for each split
     # Currently support: sst2
     if dataset_name == 'sst2':
-        glue_dataset = {split_name: Dataset.from_dict({'text': glue_dataset[split_name]['sentence'], 
-                                                'label': glue_dataset[split_name]['label']}) 
-                                                for split_name in glue_dataset}
+        glue_dataset = {}
+        for split_name in glue_dataset:
+            if tokenizer is not None:
+                glue_dataset[split_name] = Dataset.from_dict({
+                    'text': tokenizer(glue_dataset[split_name]['sentence'],
+                                      padding='max_length',
+                                      max_length=max_seq_length,
+                                      return_tensors='pt',
+                                      truncation=True),
+                    'label': glue_dataset[split_name]['label'],
+                })
+            else:
+                glue_dataset[split_name] = Dataset.from_dict({
+                    'text': glue_dataset[split_name]['sentence'],
+                    'label': glue_dataset[split_name]['label'],
+                })
     else:
         raise TypeError('Wrong dataset name!')
     return glue_dataset

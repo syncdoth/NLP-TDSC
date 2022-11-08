@@ -4,7 +4,6 @@ implementation of the training loop.
 import gc
 import logging
 import time
-from typing import Dict
 from sklearn.cluster import SpectralClustering
 
 import numpy as np
@@ -17,18 +16,13 @@ from evaluate import evaluate
 from data import get_triplet_data
 
 
-def train(model: nn.Module,
-          tokenized_data,
-          loss_fn,
-          args,
-          device='cpu'):
+def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
     """ Trains a given model and dataset.
 
     obtained and adapted from:
     https://github.com/fabio-deep/Distributed-Pytorch-Boilerplate/blob/master/src/train.py
-    """
 
-    ''' training_modes
+    training_modes
 
     check training_modes only contains options from the following:
     'unsup': unsupervised training (including triplet loss, self expression loss, ...),
@@ -36,19 +30,20 @@ def train(model: nn.Module,
     'sup': usual supervised training, may call this mode after 'unsup' training to correct model's prediction
     'nlp': some NLP pretraining tasks, as substitutions for Reconstruction Task
 
-    Note that if we only train on unsup mode, the model will collapse to 
+    Note that if we only train on unsup mode, the model will collapse to
         constant function ~ one of optimal solution of the training objective
     So we recommend to have 'sup' or 'nlp' in training_modes
-
-    '''
-    num_training_samples = tokenized_data['train'][2]
+    """
+    num_training_samples = len(tokenized_data['train']['label'])
     training_modes = args.training_modes.split('|')
 
     if set(training_modes).difference(['unsup', 'sup', 'nlp']):
-        raise NotImplementedError(f"Not support {set(training_modes).difference(['unsup', 'sup', 'nlp'])} training modes")
+        raise NotImplementedError(
+            f"Not support {set(training_modes).difference(['unsup', 'sup', 'nlp'])} training modes")
     if 'unsup' in training_modes:
         # initialize unsup labels to construct Triplet Dataset
-        unsup_labels = torch.empty(num_training_samples, dtype=torch.int8).random_(args.num_unsup_clusters)
+        unsup_labels = torch.empty(num_training_samples,
+                                   dtype=torch.int8).random_(args.num_unsup_clusters)
 
     # TODO: load tokenized_data['valid'] and tokenized_data['test'] by dataloader
     # or modify evaluate() function
@@ -83,16 +78,17 @@ def train(model: nn.Module,
     index = np.arange(num_training_samples)
     np.random.shuffle(index)
     # train_dataloader = tokenized_data['train'][0]
-    num_steps_per_epoch = (num_training_samples-1)//args.batch_size + 1
+    num_steps_per_epoch = (num_training_samples - 1) // args.batch_size + 1
 
     since = time.time()
-    for epoch in range(args.n_epochs):
+    for epoch in range(args.n_epochs, 1):
         if 'unsup' in training_modes:
             # create triplet dataset indices D. D has 3 keys, ['anchor', 'pos', 'neg']
             # D['anchor'] should be range(num_training_samples)
             D = get_triplet_data(num_training_samples, unsup_labels)
             print('Unsup labels:\n', unsup_labels, '\nTriplet dataset:\n', D)
-            embs_for_clustering = np.zeros((num_training_samples, model.hidden_dim))  # for clustering
+            embs_for_clustering = np.zeros(
+                (num_training_samples, model.hidden_dim))  # for clustering
             kfactor_labels = torch.zeros(num_training_samples, dtype=torch.int8)
 
         model.train()
@@ -101,11 +97,14 @@ def train(model: nn.Module,
         running_acc = 0
 
         if args.verbose:
-            logging.info(f'\nEpoch {epoch + 1}/{args.n_epochs}:\n')
+            logging.info(f'\nEpoch {epoch}/{args.n_epochs}:\n')
 
-        for i in tqdm(range(num_steps_per_epoch), position=0, total=num_steps_per_epoch, desc=f'Epoch {epoch}'):
+        for i in tqdm(range(num_steps_per_epoch),
+                      position=0,
+                      total=num_steps_per_epoch,
+                      desc=f'Epoch {epoch}'):
             # beginning and ending index for this batch
-            b, e = i*args.batch_size, min((i+1)*args.batch_size, num_training_samples)
+            b, e = i * args.batch_size, min((i + 1) * args.batch_size, num_training_samples)
             optimizer.zero_grad()
 
             # retrieve data
@@ -113,26 +112,30 @@ def train(model: nn.Module,
                 embs = {}
                 loss = 0
                 for s in ['anchor', 'pos', 'neg']:
-                    idx = D[s][index[b:e]]    # index in this batch
-                    input_ids = tokenized_data['train'][0]['input_ids'][idx].to(device)
-                    attention_mask = tokenized_data['train'][0]['attention_mask'][idx].to(device)
+                    idx = D[s][index[b:e]]  # index in this batch
+                    input_ids = tokenized_data['train']['text']['input_ids'][idx].to(device)
+                    attention_mask = tokenized_data['train']['text']['attention_mask'][idx].to(
+                        device)
                     embs[s] = model.get_lm_embedding(input_ids, attention_mask)
                     if s == 'anchor':
-                        embs_for_clustering[idx] = embs[s].cpu().detach().numpy()   # a non-gradient copy of embs
+                        embs_for_clustering[idx] = embs[s].cpu().detach().numpy(
+                        )  # a non-gradient copy of embs
 
-                    if 'sup' in training_modes: # TODO: may train for 'anchor' only
-                        labels = tokenized_data['train'][1][idx].to(device)
+                    if 'sup' in training_modes:  # TODO: may train for 'anchor' only
+                        labels = tokenized_data['train']['label'][idx].to(device)
                         logits = model.classifier(embs[s])
                         sup_loss = loss_fn(logits, labels)
                         loss += sup_loss
 
                         sample_count += input_ids.size(0)
-                        running_loss += loss.item() * input_ids.size(0)             # smaller batches count less
-                        running_acc += (logits.argmax(-1) == labels).sum().item()   # num corrects
+                        running_loss += loss.item() * input_ids.size(
+                            0)  # smaller batches count less
+                        running_acc += (logits.argmax(-1) == labels).sum().item()  # num corrects
 
                 # unsup loss, including Triplet Loss and Self Expression Loss
                 unsup_loss, kfactor_batch_label = model.get_unsup_loss(embs)
-                kfactor_labels[D['anchor'][index[b:e]]] = kfactor_batch_label.cpu().detach().to(torch.int8)
+                kfactor_labels[D['anchor'][index[b:e]]] = kfactor_batch_label.cpu().detach().to(
+                    torch.int8)
                 loss += unsup_loss
 
                 loss.backward()
@@ -140,9 +143,9 @@ def train(model: nn.Module,
 
             elif 'sup' in training_modes:
                 idx = index[b:e]
-                input_ids = tokenized_data['train'][0]['input_ids'][idx].to(device)
-                attention_mask = tokenized_data['train'][0]['attention_mask'][idx].to(device)
-                labels = tokenized_data['train'][1][idx].to(device)
+                input_ids = tokenized_data['train']['text']['input_ids'][idx].to(device)
+                attention_mask = tokenized_data['train']['text']['attention_mask'][idx].to(device)
+                labels = tokenized_data['train']['label'][idx].to(device)
 
                 embs = model.get_lm_embedding(input_ids, attention_mask)
                 logits = model.classifier(embs)
@@ -164,11 +167,14 @@ def train(model: nn.Module,
             if args.unsup_clustering_method == 'kfactor':
                 unsup_labels = kfactor_labels.clone()
             elif args.unsup_clustering_method == 'spectral':
-                clustering = SpectralClustering(n_clusters=args.num_unsup_clusters, 
-                                                assign_labels='cluster_qr', 
+                clustering = SpectralClustering(n_clusters=args.num_unsup_clusters,
+                                                assign_labels='cluster_qr',
                                                 random_state=args.seed)
                 clustering.fit(embs_for_clustering)
                 unsup_labels = torch.tensor(clustering.labels_)
+            else:
+                raise NotImplementedError(
+                    '--unsup_clustering_method should be one of `kfactor` or `spectral`.')
 
         # reduce lr
         if args.decay_steps > 0:
@@ -208,11 +214,9 @@ def train(model: nn.Module,
         logging.info(f'\nTraining time: {time_elapsed // 60:.0f}m {time_elapsed % 60:.0f}s')
 
         model.load_state_dict(torch.load(args.checkpoint_dir))  # load best model
-        test_loss, test_acc = evaluate(model, 
-                                       tokenized_data['test'], 
-                                       loss_fn, 
-                                       args,
-                                       device=device)
+
+        test_loss, test_acc = evaluate(model, tokenized_data['test'], loss_fn, args, device=device)
+
         logging.info(f'\nBest [Valid] | epoch: {best_epoch} - loss: {best_valid_loss:.4f} '
                      f'- acc: {best_valid_acc:.4f}')
         logging.info(f'[Test] loss {test_loss:.4f} - acc: {test_acc:.4f}')
