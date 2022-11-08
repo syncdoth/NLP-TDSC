@@ -9,7 +9,7 @@ import pandas as pd
 from transformers import AutoTokenizer
 
 from util import set_random_seeds
-from data import get_MNIST_datasets, get_MNIST_dataloaders
+from data import *
 from train import train
 from model import TdscLanguageModel
 
@@ -52,23 +52,26 @@ def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # load model, tokenizer
-    model = TdscLanguageModel(args=args).to(device)
+    # model = TdscLanguageModel(args=args).to(device)
     tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
 
     # load data
     # process data to a dict {'input_ids': input_ids (for all training sample)}
     # so that we can form the triplet data easily, by calling train_data = [data[Da, Dp, Dn] for D.. in batches]
     # should keep 'text' and 'label' on each dataset
+    # data = get_GLUE_datasets('sst2')
+    data = get_madeup_data_for_testing()
     tokenized_data = {}     # split: (data, label, n_samples)
     
-    for split in ['train', 'valid', 'test']:
-        data =  pd.read_csv(os.path.join(agrs.data_path, split+'.csv'))[['text','label']] \
+    for split in ['train', 'valid']: # currently ignore 'test', since some tasks of GLUE benckmark do not provide test label
+        # data =  pd.read_csv(os.path.join(agrs.data_path, split+'.csv'))[['text','label']]
         tokenized_data[split] = [
             tokenizer(data[split]['text'], 
                     padding=args.padding_strategy, 
                     max_length=args.max_seq_length, 
-                    truncation=True),
-            data[split]['label'],
+                    truncation=True,
+                    return_tensors='pt'),
+            torch.tensor(data[split]['label']),
             len(data[split]['label'])
         ]
 

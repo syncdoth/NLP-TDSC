@@ -1,6 +1,7 @@
 # coding: utf-8
 # Jiayang Cheng
 
+import random
 import torch
 from torchvision import transforms
 
@@ -63,7 +64,37 @@ def get_GLUE_dataloaders(glue_dataset, train_batch_size=8, eval_batch_size=32, n
             data_loaders[split_name] = torch.utils.data.DataLoader(glue_dataset[split_name], batch_size=eval_batch_size, shuffle=False, num_workers=num_workers)
     return data_loaders
 
+def get_madeup_data_for_testing():
+    return {
+        'train': {
+            'text': ['so that we can form', 
+                    'the triplet data easily', 
+                    'by calling train_data', 
+                    'so that we can form', 
+                    'the triplet data easily', 
+                    'by calling train_data']
+            'label': [0, 1, 1, 1, 0, 0]
+        }
+        'valid': {
+            'text': ['process data to a dictionary']
+            'label': [0]
+        }
+    }
 
+def get_triplet_data(num_training_samples, unsup_labels):
+    D = {k: torch.tensor(range(num_training_samples)) for k in ['anchor', 'pos', 'neg']}
+    for i in unsup_labels.unique():
+        same = D['anchor'][unsup_labels == i].tolist()
+        diff = D['anchor'][unsup_labels != i].tolist()
+        # print(i, same, diff, sep=' | ')
+        for idx in same:
+            for s, group in zip(['pos', 'neg'], [same, diff]):
+                while True:
+                    cands = random.choice(group)
+                    if cands != idx:
+                        D[s][idx] = cands
+                        break
+    return D
 
 
 if __name__ == '__main__':
