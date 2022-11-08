@@ -2,6 +2,7 @@
 The main file to run experiments.
 """
 import argparse
+import logging
 import os
 
 import torch
@@ -65,6 +66,14 @@ def main():
     set_random_seeds(args.seed)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     os.makedirs(os.path.dirname(args.checkpoint_dir), exist_ok=True)
+    logging.basicConfig(handlers=[
+        logging.FileHandler(os.path.join(args.checkpoint_dir, 'train_log.log'), mode='a'),
+        logging.StreamHandler(),
+    ],
+                        format='%(asctime)s:%(msecs)d|%(name)s|%(levelname)s: %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S',
+                        level=logging.INFO)
+    logging.info('Start Training!')
 
     # load model, tokenizer
     model = TdscLanguageModel(args).to(device)
