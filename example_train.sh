@@ -1,10 +1,15 @@
-python main.py \
-    --n_epochs 10 \
-    --batch_size 128 \
+CUDA_VISIBLE_DEVICES=7 python main.py \
+    --model_name_or_path roberta-base \
+    --dataset_name sst2 \
+    --training_modes 'sup' \
+    --max_seq_length 48 \
+    --n_epochs 2 \
+    --batch_size 32 \
     --optimizer adam \
-    --weight_decay 0.01 \
-    --lr 1e-3 \
+    --weight_decay 0 \
+    --lr 1e-5 \
     --decay_steps 0 \
-    --lr_decay_rate 0.9 \
+    --lr_decay_rate 0.1 \
     --seed 2022 \
-    --checkpoint_dir saved_models/example_train_best.pth
+    --checkpoint_dir saved_models/roberta_base_sst2.pth \
+    --verbose

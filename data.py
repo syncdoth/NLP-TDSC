@@ -19,7 +19,8 @@ def get_MNIST_datasets(data_path="./data/", transform=None):
     data_test = datasets.MNIST(root=data_path, transform=transform, train=False, download=True)
     return {'train': data_train, 'test': data_test}
 
-def get_MNIST_dataloaders(MNIST_data, train_valid_split=(50000, 10000), train_batch_size=32, eval_batch_size=32, seed=2022, num_workers=4):
+def get_MNIST_dataloaders(MNIST_data, train_valid_split=(50000, 10000), 
+                            train_batch_size=32, eval_batch_size=32, seed=2022, num_workers=4):
     """ Get MNIST dataloaders, including splitting the original train set into train and validation sets.
     """
     train_data, valid_data = torch.utils.data.random_split(MNIST_data['train'], train_valid_split, 
@@ -27,9 +28,12 @@ def get_MNIST_dataloaders(MNIST_data, train_valid_split=(50000, 10000), train_ba
     test_data = MNIST_data['test']
 
     data_loaders = {
-        'train': torch.utils.data.DataLoader(train_data, batch_size=train_batch_size, shuffle=True, num_workers=num_workers),
-        'valid': torch.utils.data.DataLoader(valid_data, batch_size=eval_batch_size, shuffle=False, num_workers=num_workers),
-        'test': torch.utils.data.DataLoader(test_data, batch_size=eval_batch_size, shuffle=False, num_workers=num_workers),
+        'train': torch.utils.data.DataLoader(train_data, 
+                            batch_size=train_batch_size, shuffle=True, num_workers=num_workers),
+        'valid': torch.utils.data.DataLoader(valid_data, 
+                            batch_size=eval_batch_size, shuffle=False, num_workers=num_workers),
+        'test': torch.utils.data.DataLoader(test_data, 
+                            batch_size=eval_batch_size, shuffle=False, num_workers=num_workers),
     }
 
     return data_loaders
@@ -59,9 +63,11 @@ def get_GLUE_dataloaders(glue_dataset, train_batch_size=8, eval_batch_size=32, n
     data_loaders = {}
     for split_name in glue_dataset:
         if split_name.lower() == 'train':
-            data_loaders[split_name] = torch.utils.data.DataLoader(glue_dataset[split_name], batch_size=train_batch_size, shuffle=True, num_workers=num_workers)
+            data_loaders[split_name] = torch.utils.data.DataLoader(glue_dataset[split_name],
+                            batch_size=train_batch_size, shuffle=True, num_workers=num_workers)
         else:
-            data_loaders[split_name] = torch.utils.data.DataLoader(glue_dataset[split_name], batch_size=eval_batch_size, shuffle=False, num_workers=num_workers)
+            data_loaders[split_name] = torch.utils.data.DataLoader(glue_dataset[split_name],
+                            batch_size=eval_batch_size, shuffle=False, num_workers=num_workers)
     return data_loaders
 
 def get_madeup_data_for_testing():
@@ -72,11 +78,11 @@ def get_madeup_data_for_testing():
                     'by calling train_data', 
                     'so that we can form', 
                     'the triplet data easily', 
-                    'by calling train_data']
+                    'by calling train_data'],
             'label': [0, 1, 1, 1, 0, 0]
-        }
+        },
         'valid': {
-            'text': ['process data to a dictionary']
+            'text': ['process data to a dictionary'],
             'label': [0]
         }
     }
@@ -89,11 +95,15 @@ def get_triplet_data(num_training_samples, unsup_labels):
         # print(i, same, diff, sep=' | ')
         for idx in same:
             for s, group in zip(['pos', 'neg'], [same, diff]):
-                while True:
-                    cands = random.choice(group)
-                    if cands != idx:
-                        D[s][idx] = cands
-                        break
+                # choose a different instance from the same group as pos
+                if len(group) == 1:
+                    D[s][idx] = idx
+                else:
+                    while True:
+                        cands = random.choice(group)
+                        if cands != idx:
+                            D[s][idx] = cands
+                            break
     return D
 
 

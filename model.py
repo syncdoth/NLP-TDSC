@@ -27,7 +27,7 @@ class TdscLanguageModel(nn.Module):
         except:
             self.hidden_dim = self.model.config.hidden_size # roberta/bert
 
-        self.classifier = LMClassificationHead(self.hidden_dim, self.args.num_labels)
+        self.classifier = LMClassificationHead(self.hidden_dim, self.args.num_sup_labels)
         self.self_exp = KFactor(args.num_unsup_clusters, self.hidden_dim, args.num_factor_per_cluster)
 
     def forward(self):
@@ -57,7 +57,7 @@ class TdscLanguageModel(nn.Module):
         # self expression loss + clustering
         se_loss, cluster_label = 0, []
         for s in ['anchor', 'pos', 'neg']:
-            loss, label =  self.self_exp(embs[b])
+            loss, label =  self.self_exp(embs[s])
             se_loss += loss
             if s == 'anchor':
                 cluster_label = label
@@ -106,9 +106,9 @@ class KFactor(nn.Module):
         DTD_inv_list = []   # still take the gradient
         for d in self.D:
             dtd = d.T @ d   # TODO: don't we add gamma*I here?
-            DTD_inv_list.append(torch.linalg.inv(dtd))
+            DTD_inv_list.append(torch.inverse(dtd))
 
-        return DTD_invs = torch.stack(DTD_inv_list, dim=0)
+        return torch.stack(DTD_inv_list, dim=0)
 
 
 # ref: https://github.com/huggingface/transformers/blob/main/src/transformers/models/roberta/modeling_roberta.py#L1431
@@ -121,7 +121,7 @@ class LMClassificationHead(nn.Module):
         self.dropout = nn.Dropout(classifier_dropout)
         self.out_proj = nn.Linear(hidden_size, num_labels)
 
-    def forward(self, embs, **kwargs):
+    def forward(self, x, **kwargs):
         x = self.dropout(x)
         x = self.dense(x)
         x = torch.tanh(x)
