@@ -82,7 +82,7 @@ def main():
     # load data
     # NOTE: by passing tokenizer into this function, the 'text' field is now
     # tokenized text.
-    data = get_GLUE_datasets(dataset_name=args.data_name_or_path,
+    data = get_GLUE_datasets(dataset_name=args.dataset_name,
                              tokenizer=tokenizer,
                              max_seq_length=args.max_seq_length)
     if 'valid' not in data.keys() and 'validation' in data.keys():
