@@ -82,6 +82,7 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
                                                   min_lr=1e-6,
                                                   verbose=True)
 
+    epoch_valid_loss = None
     best_valid_loss = np.inf
     best_valid_acc = 0
 

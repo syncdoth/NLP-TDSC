@@ -88,7 +88,7 @@ def main():
                              max_seq_length=args.max_seq_length)
     if 'valid' not in data.keys() and 'validation' in data.keys():
         data['valid'] = data.pop('validation')
-    if 'test' not in data.keys():
+    if 'test' not in data.keys() or args.dataset_name == 'sst2':
         data['test'] = data['valid']
 
     # TODO: add more init & control here
