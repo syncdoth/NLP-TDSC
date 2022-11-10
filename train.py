@@ -14,6 +14,7 @@ from tqdm import tqdm
 
 from evaluate import evaluate
 from data import get_triplet_data
+from transformers import get_linear_schedule_with_warmup
 
 
 def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
@@ -59,8 +60,18 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
     else:
         raise NotImplementedError(f'{args.optimizer} not setup.')
 
+    # shuffle training data by index list, then in training loop, just take data and labels by batching index
+    index = np.arange(num_training_samples)
+    np.random.shuffle(index)
+    # train_dataloader = tokenized_data['train'][0]
+    num_steps_per_epoch = (num_training_samples - 1) // args.batch_size + 1
+
     # lr schedulers
-    if args.decay_steps > 0:
+    if args.linear_decay:
+        lr_decay = get_linear_schedule_with_warmup(optimizer,
+                                                   num_warmup_steps=0,
+                                                   num_training_steps=num_steps_per_epoch * args.n_epochs)
+    elif args.decay_steps > 0:
         lr_decay = lr_scheduler.ExponentialLR(optimizer, gamma=args.lr_decay_rate)
     else:
         lr_decay = lr_scheduler.ReduceLROnPlateau(optimizer,
@@ -73,12 +84,6 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
 
     best_valid_loss = np.inf
     best_valid_acc = 0
-
-    # shuffle training data by index list, then in training loop, just take data and labels by batching index
-    index = np.arange(num_training_samples)
-    np.random.shuffle(index)
-    # train_dataloader = tokenized_data['train'][0]
-    num_steps_per_epoch = (num_training_samples - 1) // args.batch_size + 1
 
     since = time.time()
     for epoch in range(1, args.n_epochs + 1):
@@ -177,7 +182,7 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
                     '--unsup_clustering_method should be one of `kfactor` or `spectral`.')
 
         # reduce lr
-        if args.decay_steps > 0:
+        if args.decay_steps > 0 or args.linear_decay:
             lr_decay.step()
         else:  # reduce on plateau, evaluate to keep track of acc in each process
             epoch_valid_loss, epoch_valid_acc = evaluate(model,

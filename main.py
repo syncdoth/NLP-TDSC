@@ -51,6 +51,7 @@ def options():
     parser.add_argument('--decay_steps', type=int,  default=0,
                         help='decay lr after x epochs. 0 means to use ReduceLrOnPlateau')
     parser.add_argument('--lr_decay_rate', type=float, default=0.8, help='how much to decay lr')
+    parser.add_argument('--linear_decay', action='store_true', help='use linear deacy scheduler')
     # model
     parser.add_argument('--classifier_dropout', type=float, default=0.1,
                         help='dropout prob of the classifier MLP')
