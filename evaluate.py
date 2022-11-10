@@ -14,7 +14,7 @@ def evaluate(model, eval_data, loss_fn, args, device='cpu'):
     sample_count = 0
     running_loss = 0
     running_acc = 0
-    num_eval_samples = eval_data[2]
+    num_eval_samples = len(eval_data['label'])
     num_eval_steps = (num_eval_samples-1)//args.batch_size + 1
     # TODO: add other metric, e.g AUC, Macro F1
 
