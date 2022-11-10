@@ -50,25 +50,25 @@ def get_GLUE_datasets(dataset_name='sst2', tokenizer=None, max_seq_length=None):
     # preprocess, normalize the column name into 'text' and 'label' for each split
     # Currently support: sst2
     if dataset_name == 'sst2':
-        glue_dataset = {}
+        dataset = {}
         for split_name in glue_dataset:
             if tokenizer is not None:
-                glue_dataset[split_name] = Dataset.from_dict({
+                dataset[split_name] = {
                     'text': tokenizer(glue_dataset[split_name]['sentence'],
                                       padding='max_length',
                                       max_length=max_seq_length,
                                       return_tensors='pt',
                                       truncation=True),
-                    'label': glue_dataset[split_name]['label'],
-                })
+                    'label': torch.LongTensor(glue_dataset[split_name]['label']),
+                }
             else:
-                glue_dataset[split_name] = Dataset.from_dict({
+                dataset[split_name] = {
                     'text': glue_dataset[split_name]['sentence'],
                     'label': glue_dataset[split_name]['label'],
-                })
+                }
     else:
         raise TypeError('Wrong dataset name!')
-    return glue_dataset
+    return dataset
 
 def get_GLUE_dataloaders(glue_dataset, train_batch_size=8, eval_batch_size=32, num_workers=4):
     """ Get GLUE dataloaders for a given GLUE dataset (the returned dict from ``get_GLUE_datasets'').

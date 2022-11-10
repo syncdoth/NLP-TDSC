@@ -81,7 +81,7 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
     num_steps_per_epoch = (num_training_samples - 1) // args.batch_size + 1
 
     since = time.time()
-    for epoch in range(args.n_epochs, 1):
+    for epoch in range(1, args.n_epochs + 1):
         if 'unsup' in training_modes:
             # create triplet dataset indices D. D has 3 keys, ['anchor', 'pos', 'neg']
             # D['anchor'] should be range(num_training_samples)

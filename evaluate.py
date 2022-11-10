@@ -23,9 +23,9 @@ def evaluate(model, eval_data, loss_fn, args, device='cpu'):
         for i in tqdm(range(num_eval_steps), position=0, total=num_eval_steps, desc=f'Evaluation'):
             b, e = i*args.batch_size, min((i+1)*args.batch_size, num_eval_samples)
             idx = range(b,e)
-            input_ids = eval_data[0]['input_ids'][idx].to(device)
-            attention_mask = eval_data[0]['attention_mask'][idx].to(device)
-            labels = eval_data[1][idx].to(device)
+            input_ids = eval_data['text']['input_ids'][idx].to(device)
+            attention_mask = eval_data['text']['attention_mask'][idx].to(device)
+            labels = eval_data['label'][idx].to(device)
 
             embs = model.get_lm_embedding(input_ids, attention_mask)
             logits = model.classifier(embs)
