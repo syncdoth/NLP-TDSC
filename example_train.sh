@@ -15,4 +15,4 @@ python main.py \
     --verbose
 
 # original tdsc training
-python tdsc.py --db coil20
+python tdsc.py --db coil20 --show-freq 10 --seed 100

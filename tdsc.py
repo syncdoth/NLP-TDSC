@@ -19,6 +19,7 @@ from torch import optim
 
 from post_clustering import acc, nmi, spectral_clustering
 from data import get_triplet_data
+from util import set_random_seeds
 
 
 class Conv2dSamePad(nn.Module):
@@ -153,7 +154,7 @@ def tdscnet_train(model, x, y, unsup_label_init_source='random',
                 show=10, device='cuda'):
 
     num_sample = x.shape[0]
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    optimizer = optim.Adam(model.parameters(), lr=lr)   # 1e-3 is exactly default lr of Adam
     if not isinstance(x, torch.Tensor):
         x = torch.tensor(x, dtype=torch.float32, device=device)
     x = x.to(device)
@@ -193,14 +194,16 @@ def tdscnet_experiments():
                         choices=['coil20', 'coil100', 'orl', 'reuters10k', 'stl'])
     parser.add_argument('--show-freq', default=10, type=int)
     parser.add_argument('--ae-weights', default=None)
-    parser.add_argument('--save-dir', default='saved_models')
+    parser.add_argument('--save-dir', default='saved_models/tdsc_cv')
     parser.add_argument('--num_unsup_clusters', type=int, default=2)
+    parser.add_argument('--seed', default=100, type=int)
     args = parser.parse_args()
     print(args)
 
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
 
+    set_random_seeds(args.seed)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     db = args.db
 
@@ -268,16 +271,17 @@ def tdscnet_experiments():
 
     # load the pretrained weights which are provided by the original author in
     # https://github.com/panji1990/Deep-subspace-clustering-networks
-    # ae_state_dict = torch.load('results/pretrained_weights_original/%s.pkl' % db)
-    # tdscnet.ae.load_state_dict(ae_state_dict)
-    # print("Pretrained ae weights are loaded successfully.")
+    # TDSC paper, page 5, Training Strategy of Network, it said two stages training -> need to load pretrained model
+    ae_state_dict = torch.load('pretrained_weights_original/%s.pkl' % db)
+    tdscnet.ae.load_state_dict(ae_state_dict)
+    print("Pretrained ae weights are loaded successfully.")
 
     print('Start training ...')
     tdscnet_train(tdscnet, x, y, unsup_label_init_source='random', # 'random' initialization or 'ground_truth'
                 epochs=epochs, epochs_update=epochs_update, weights=weights,
                 alpha=alpha, dim_subspace=dim_subspace, ro=ro,
                 show=args.show_freq, device=device)
-    torch.save(tdscnet.state_dict(), args.save_dir + '/tdsc_cv/%s-model.pt' % args.db)
+    torch.save(tdscnet.state_dict(), args.save_dir + '/%s-model.pt' % args.db)
 
 
 
