@@ -28,8 +28,8 @@ class TdscLanguageModel(nn.Module):
         self.classifier = LMClassificationHead(self.hidden_dim,
                                                self.args.num_sup_labels,
                                                classifier_dropout=self.args.classifier_dropout)
-        self.self_exp = KFactor(args.num_unsup_clusters, self.hidden_dim,
-                                args.num_factor_per_cluster)
+        self.self_exp = KFactor(args.num_unsup_clusters, self.hidden_dim, args.num_factor_per_cluster)
+        self.weights = {k:float(v) for k,v in zip(['c','se','tri'], args.unsup_losses_weights.split('|'))}
 
     def forward(self):
         raise NotImplementedError('Should use specific functions to feed-forward the model. '
@@ -53,18 +53,21 @@ class TdscLanguageModel(nn.Module):
         return sentence_representation
 
     def get_unsup_loss(self, embs):
-        # self expression loss + clustering
-        se_loss, cluster_label = 0, []
+        # regularization (c) loss, self expression loss, clustering label
+        weights = self.weights
+        c_loss, se_loss, cluster_label = 0, 0, []
         for s in ['anchor', 'pos', 'neg']:
-            loss, label = self.self_exp(embs[s])
-            se_loss += loss
+            temp = self.self_exp(embs[s])
+            c_loss  += temp[0]
+            se_loss += temp[1]
             if s == 'anchor':
-                cluster_label = label
+                cluster_label = temp[2]
 
         # triplet loss
         triplet_loss = nn.functional.triplet_margin_loss(embs['anchor'], embs['pos'], embs['neg'])
+        total_loss = weights['c']*c_loss + weights['se']*se_loss + weights['tri']*triplet_loss
 
-        return se_loss + triplet_loss, cluster_label
+        return total_loss, cluster_label
 
 
 class KFactor(nn.Module):
@@ -85,22 +88,22 @@ class KFactor(nn.Module):
 
     def forward(self, x):
         """
-        Compute C given D, this process is not involed in backward propagation
+        Compute regularization loss, self expression loss, and clustering label
         """
-        with torch.no_grad():
-            Dtx = torch.einsum('nij,bi->nbj', self.D, x)
-            DTD_invs = self.compute_DTD_inv()  # compute DTD_invs
-            Cs = torch.einsum('nbj,nkj->nbk', Dtx,
-                              DTD_invs)  # is that line 9, Algorithm 5, in the paper?
-            x_hat = torch.einsum('nij,nbj->nbi', self.D, Cs)
-            label = torch.norm(x_hat - x.view(1, -1, self.factor_dim), dim=-1).argmin(dim=0)
-            C = Cs[label, [i for i in range(x.shape[0])]]
+        Dtx = torch.einsum('nij,bi->nbj', self.D, x)
+        DTD_invs = self.compute_DTD_inv()  # compute DTD_invs
+        Cs = torch.einsum('nbj,nkj->nbk', Dtx,
+                            DTD_invs)  # is that line 9, Algorithm 5, in the paper?
+        x_hat = torch.einsum('nij,nbj->nbi', self.D, Cs)
+        label = torch.norm(x_hat - x.view(1, -1, self.factor_dim), dim=-1).argmin(dim=0)
+        C = Cs[label, [i for i in range(x.shape[0])]]
 
-        se_loss = 0  # TODO: don't we add some constraint on D? e.g L2 regularization loss
+        se_loss, c_loss = 0, 0  # TODO: don't we add some constraint on D? e.g L2 regularization loss
         for i in range(x.shape[0]):
             se_loss += torch.sum((x[i] - self.D[label[i]] @ C[i]).square())  # @ is matmul
+            c_loss += C[i].square().sum()
 
-        return (se_loss, label)
+        return (c_loss, se_loss, label)
 
     def compute_DTD_inv(self):
         DTD_inv_list = []  # still take the gradient

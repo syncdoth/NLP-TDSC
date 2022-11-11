@@ -1,5 +1,5 @@
 """
-implementation of the training loop.
+implementation of the training loop. column_width=120
 """
 import gc
 import logging
@@ -120,12 +120,10 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
                 for s in ['anchor', 'pos', 'neg']:
                     idx = D[s][index[b:e]]  # index in this batch
                     input_ids = tokenized_data['train']['text']['input_ids'][idx].to(device)
-                    attention_mask = tokenized_data['train']['text']['attention_mask'][idx].to(
-                        device)
+                    attention_mask = tokenized_data['train']['text']['attention_mask'][idx].to(device)
                     embs[s] = model.get_lm_embedding(input_ids, attention_mask)
                     if s == 'anchor':
-                        embs_for_clustering[idx] = embs[s].cpu().detach().numpy(
-                        )  # a non-gradient copy of embs
+                        embs_for_clustering[idx] = embs[s].cpu().detach().numpy()  # a non-gradient copy of embs
 
                     if 'sup' in training_modes:  # TODO: may train for 'anchor' only
                         labels = tokenized_data['train']['label'][idx].to(device)
@@ -134,14 +132,12 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
                         loss += sup_loss
 
                         sample_count += input_ids.size(0)
-                        running_loss += loss.item() * input_ids.size(
-                            0)  # smaller batches count less
+                        running_loss += loss.item() * input_ids.size(0)  # smaller batches count less
                         running_acc += (logits.argmax(-1) == labels).sum().item()  # num corrects
 
                 # unsup loss, including Triplet Loss and Self Expression Loss
                 unsup_loss, kfactor_batch_label = model.get_unsup_loss(embs)
-                kfactor_labels[D['anchor'][index[b:e]]] = kfactor_batch_label.cpu().detach().to(
-                    torch.int8)
+                kfactor_labels[D['anchor'][index[b:e]]] = kfactor_batch_label.cpu().detach().to(torch.int8)
                 loss += unsup_loss
 
                 loss.backward()

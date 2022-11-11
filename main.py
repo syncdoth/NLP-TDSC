@@ -35,6 +35,8 @@ def options():
     parser.add_argument('--training_modes', type=str, default='unsup|sup',
         help='training modes to train the model on, including "sup" ~ supervised, "unsup" ~ unsupervised, '
             'and "nlp" ~ other pretraining tasks, e.g Mask Token, Next Sentence Prediction')
+    parser.add_argument('--unsup_losses_weights', type=str, default='100|1|1',
+        help='weights are gamma_0, _1, _2 in Table 3 of the TSDC paper')
 
     # data / io related
     parser.add_argument('--dataset_name', type=str, default='sst2')
@@ -66,14 +68,17 @@ def main():
     args = options()
     set_random_seeds(args.seed)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    os.makedirs(os.path.dirname(args.checkpoint_dir), exist_ok=True)
-    logging.basicConfig(handlers=[
-        logging.FileHandler(os.path.join(os.path.dirname(args.checkpoint_dir), 'train_log.log'), mode='a'),
-        logging.StreamHandler(),
-    ],
-                        format='%(asctime)s:%(msecs)d|%(name)s|%(levelname)s: %(message)s',
-                        datefmt='%Y-%m-%d %H:%M:%S',
-                        level=logging.INFO)
+    base_path = os.path.dirname(args.checkpoint_dir)
+    os.makedirs(base_path, exist_ok=True)
+    
+    logging.basicConfig(
+        handlers=[
+            logging.FileHandler(os.path.join(base_path, 'train_log.log'), mode='a'),
+            logging.StreamHandler(),
+        ],
+        format='%(asctime)s:%(msecs)d|%(name)s|%(levelname)s: %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
+        level=logging.INFO)
     logging.info('Start Training!')
 
     # load model, tokenizer
