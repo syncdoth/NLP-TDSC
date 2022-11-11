@@ -19,7 +19,6 @@ from torch import optim
 
 from post_clustering import acc, nmi, spectral_clustering
 from data import get_triplet_data
-from util import set_random_seeds
 
 
 class Conv2dSamePad(nn.Module):
@@ -196,14 +195,12 @@ def tdscnet_experiments():
     parser.add_argument('--ae-weights', default=None)
     parser.add_argument('--save-dir', default='saved_models')
     parser.add_argument('--num_unsup_clusters', type=int, default=2)
-    parser.add_argument('--seed', default=100, type=int)
     args = parser.parse_args()
     print(args)
 
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    set_random_seeds(args.seed)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     db = args.db
 
