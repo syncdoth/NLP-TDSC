@@ -70,7 +70,7 @@ def get_GLUE_datasets(dataset_name='sst2', tokenizer=None, max_seq_length=None):
                     'text': glue_dataset[split_name]['sentence'],
                     'label': glue_dataset[split_name]['label'],
                 })
-    if dataset_name == 'sst5':
+    elif dataset_name == 'sst5':
         for split_name in glue_dataset:
             if tokenizer is not None:
                 dataset[split_name] = {
@@ -127,7 +127,7 @@ def get_GLUE_datasets(dataset_name='sst2', tokenizer=None, max_seq_length=None):
                     'label': glue_dataset[split_name]['label']
                 })
     else:
-        raise TypeError('Wrong dataset name!')
+        raise TypeError(f'{dataset_name} is a wrong dataset name!')
     return dataset
 
 def get_GLUE_dataloaders(glue_dataset, train_batch_size=8, eval_batch_size=32, num_workers=4):
