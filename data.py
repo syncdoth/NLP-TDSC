@@ -45,12 +45,16 @@ def get_GLUE_datasets(dataset_name='sst2', tokenizer=None, max_seq_length=None):
     """
     from datasets import load_dataset
     from datasets import Dataset
-    glue_dataset = load_dataset("glue", dataset_name)
+    if dataset_name in {'sst2', 'mrpc', 'mnli_mismatched'}:
+        glue_dataset = load_dataset("glue", dataset_name)
+    elif dataset_name in {'sst5'}:
+        glue_dataset = load_dataset("SetFit/sst5")
     glue_dataset = dict(glue_dataset)
     # preprocess, normalize the column name into 'text' and 'label' for each split
-    # Currently support: sst2
+    # Currently support: sst2, MRPC, MNLI-mismatched, (To-Add SST5)
+
+    dataset = {}
     if dataset_name == 'sst2':
-        dataset = {}
         for split_name in glue_dataset:
             if tokenizer is not None:
                 dataset[split_name] = {
@@ -62,10 +66,66 @@ def get_GLUE_datasets(dataset_name='sst2', tokenizer=None, max_seq_length=None):
                     'label': torch.LongTensor(glue_dataset[split_name]['label']),
                 }
             else:
-                dataset[split_name] = {
+                dataset[split_name] = Dataset.from_dict({
                     'text': glue_dataset[split_name]['sentence'],
                     'label': glue_dataset[split_name]['label'],
+                })
+    if dataset_name == 'sst5':
+        for split_name in glue_dataset:
+            if tokenizer is not None:
+                dataset[split_name] = {
+                    'text': tokenizer(glue_dataset[split_name]['text'],
+                                      padding='max_length',
+                                      max_length=max_seq_length,
+                                      return_tensors='pt',
+                                      truncation=True),
+                    'label': torch.LongTensor(glue_dataset[split_name]['label']),
                 }
+            else:
+                dataset[split_name] = Dataset.from_dict({
+                    'text': glue_dataset[split_name]['text'],
+                    'label': glue_dataset[split_name]['label'],
+                })
+    elif dataset_name == 'mrpc':
+        for split_name in glue_dataset:
+            if tokenizer is not None:
+                dataset[split_name] = {
+                    'text': tokenizer([' '.join(sent_pair) for sent_pair in \
+                                            zip(glue_dataset[split_name]['sentence1'], 
+                                                glue_dataset[split_name]['sentence2'])],
+                                        padding='max_length',
+                                        max_length=max_seq_length,
+                                        return_tensors='pt',
+                                        truncation=True),
+                    'label': torch.LongTensor(glue_dataset[split_name]['label']),
+                }
+            else:
+                dataset[split_name] = Dataset.from_dict({
+                    'text': [' '.join(sent_pair) for sent_pair in \
+                                zip(glue_dataset[split_name]['sentence1'], 
+                                    glue_dataset[split_name]['sentence2'])],
+                    'label': glue_dataset[split_name]['label']
+                })
+    elif dataset_name == 'mnli_mismatched':
+        for split_name in glue_dataset:
+            if tokenizer is not None:
+                dataset[split_name] = {
+                    'text': tokenizer([' '.join(sent_pair) for sent_pair in \
+                                            zip(glue_dataset[split_name]['premise'], 
+                                                glue_dataset[split_name]['hypothesis'])],
+                                        padding='max_length',
+                                        max_length=max_seq_length,
+                                        return_tensors='pt',
+                                        truncation=True),
+                    'label': torch.LongTensor(glue_dataset[split_name]['label']),
+                }
+            else:
+                dataset[split_name] = Dataset.from_dict({
+                    'text': [' '.join(sent_pair) for sent_pair in \
+                                zip(glue_dataset[split_name]['premise'], 
+                                    glue_dataset[split_name]['hypothesis'])],
+                    'label': glue_dataset[split_name]['label']
+                })
     else:
         raise TypeError('Wrong dataset name!')
     return dataset
@@ -133,7 +193,7 @@ if __name__ == '__main__':
         break
 
     """ Get GLUE dataset (text data) """
-    dataset = get_GLUE_datasets('sst2')
+    dataset = get_GLUE_datasets('sst5')
     glue_loaders = get_GLUE_dataloaders(dataset, train_batch_size=8, eval_batch_size=32, num_workers=4)
     for batch in glue_loaders['train']:
         print(batch)
