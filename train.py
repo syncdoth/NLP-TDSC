@@ -15,6 +15,8 @@ from tqdm import tqdm
 from evaluate import evaluate
 from data import get_triplet_data
 from transformers import get_linear_schedule_with_warmup
+from post_clustering import acc
+import wandb
 
 
 def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
@@ -86,6 +88,13 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
     best_valid_loss = np.inf
     best_valid_acc = 0
 
+    if args.wandb:
+        if not args.wandb_runname:
+            args.wandb_runname = f'{args.mode}-{round(time.time() * 1000)}'
+        experiment = wandb.init(entity='syncdoth',
+                                project='NLP-TDSC',
+                                name=args.wandb_runname,
+                                config=args)
     since = time.time()
     for epoch in range(1, args.n_epochs + 1):
         if 'unsup' in training_modes:
@@ -101,9 +110,11 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
         sample_count = 1e-6
         running_loss = 0
         running_acc = 0
+        unsup_running_acc = 0
+        anchor_sample_count = 1e-6
 
         if args.verbose:
-            logging.info(f'\nEpoch {epoch}/{args.n_epochs}:\n')
+            logging.info(f'Epoch {epoch}/{args.n_epochs}:\n')
 
         for i in tqdm(range(num_steps_per_epoch),
                       position=0,
@@ -121,12 +132,12 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
                     idx = D[s][index[b:e]]  # index in this batch
                     input_ids = tokenized_data['train']['text']['input_ids'][idx].to(device)
                     attention_mask = tokenized_data['train']['text']['attention_mask'][idx].to(device)
+                    labels = tokenized_data['train']['label'][idx].to(device)
                     embs[s] = model.get_lm_embedding(input_ids, attention_mask)
                     if s == 'anchor':
                         embs_for_clustering[idx] = embs[s].cpu().detach().numpy()  # a non-gradient copy of embs
 
                     if 'sup' in training_modes:  # TODO: may train for 'anchor' only
-                        labels = tokenized_data['train']['label'][idx].to(device)
                         logits = model.classifier(embs[s])
                         sup_loss = loss_fn(logits, labels)
                         loss += sup_loss
@@ -138,8 +149,12 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
                 # unsup loss, including Triplet Loss and Self Expression Loss
                 unsup_loss, kfactor_batch_label = model.get_unsup_loss(embs)
                 kfactor_labels[D['anchor'][index[b:e]]] = kfactor_batch_label.cpu().detach().to(torch.int8)
-                loss += unsup_loss
 
+                # since acc function divides by sample size, multiply it back so that
+                # it is really a "running" acc, i.e. the sum of correct instances.
+                anchor_sample_count += input_ids.size(0)
+                unsup_running_acc += acc(kfactor_batch_label.cpu().numpy(), labels.cpu().numpy()) * labels.shape[0]
+                loss += unsup_loss
                 loss.backward()
                 optimizer.step()
 
@@ -161,8 +176,29 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
                 running_loss += loss.item() * input_ids.size(0)  # smaller batches count less
                 running_acc += (logits.argmax(-1) == labels).sum().item()  # num corrects
 
+            if args.log_every > 0 and i % args.log_every == 0 and args.wandb:
+                if args.decay_steps > 0:
+                    last_lr = lr_decay.get_last_lr()[0]
+                else:
+                    # NOTE: ReduceLROnPlateau do not have this function.
+                    last_lr = args.lr
+                log_items = {
+                    "train running loss": running_loss / sample_count,
+                    "LR": last_lr,
+                }
+                if 'unsup' in training_modes:
+                    log_items['unsup_loss'] = unsup_loss
+                    log_items['train clustering running acc'] = unsup_running_acc / anchor_sample_count
+                if 'sup' in training_modes:
+                    log_items['train running accuracy'] = running_acc / sample_count
+                experiment.log(log_items)
+
+            if args.linear_decay:
+                lr_decay.step()
+
         epoch_train_loss = running_loss / sample_count
         epoch_train_acc = running_acc / sample_count
+        epoch_unsup_acc = unsup_running_acc / anchor_sample_count
 
         # update unsup labels. For spectral clustering, do not normalize latent embs
         if 'unsup' in training_modes:
@@ -178,8 +214,8 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
                 raise NotImplementedError(
                     '--unsup_clustering_method should be one of `kfactor` or `spectral`.')
 
-        # reduce lr
-        if args.decay_steps > 0 or args.linear_decay:
+        # reduce lr after epoch
+        if args.decay_steps > 0:
             lr_decay.step()
         else:  # reduce on plateau, evaluate to keep track of acc in each process
             epoch_valid_loss, epoch_valid_acc = evaluate(model,
@@ -197,7 +233,8 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
                                                              args,
                                                              device=device)
 
-            logging.info(f'\n[Train] loss: {epoch_train_loss:.4f} - acc: {epoch_train_acc:.4f} |'
+            logging.info(f'[Train] loss: {epoch_train_loss:.4f} - acc: {epoch_train_acc:.4f} |'
+                         f' clustering: {epoch_unsup_acc:.4f} |'
                          f' [Valid] loss: {epoch_valid_loss:.4f} - acc: {epoch_valid_acc:.4f}')
 
             # save model and early stopping
@@ -213,12 +250,15 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
 
     if args.verbose:
         time_elapsed = time.time() - since
-        logging.info(f'\nTraining time: {time_elapsed // 60:.0f}m {time_elapsed % 60:.0f}s')
+        logging.info(f'Training time: {time_elapsed // 60:.0f}m {time_elapsed % 60:.0f}s')
 
         model.load_state_dict(torch.load(args.checkpoint_dir))  # load best model
 
         test_loss, test_acc = evaluate(model, tokenized_data['test'], loss_fn, args, device=device)
 
-        logging.info(f'\nBest [Valid] | epoch: {best_epoch} - loss: {best_valid_loss:.4f} '
+        logging.info(f'Best [Valid] | epoch: {best_epoch} - loss: {best_valid_loss:.4f} '
                      f'- acc: {best_valid_acc:.4f}')
         logging.info(f'[Test] loss {test_loss:.4f} - acc: {test_acc:.4f}')
+
+    if args.wandb:
+        wandb.finish()

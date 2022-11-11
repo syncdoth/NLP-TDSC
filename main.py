@@ -57,6 +57,12 @@ def options():
     # model
     parser.add_argument('--classifier_dropout', type=float, default=0.1,
                         help='dropout prob of the classifier MLP')
+    # wandb
+    parser.add_argument('--wandb', action='store_true', help='use wandb for logs')
+    parser.add_argument('--wandb_runname', type=str, help='experiment specific name')
+    parser.add_argument('--log_every', type=int, default=0,
+                        help='log training process to wandb every k steps')
+
     # extra
     parser.add_argument('--seed', type=int, default=2022, help="the random seed")
     # yapf: enable
@@ -70,7 +76,7 @@ def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     base_path = os.path.dirname(args.checkpoint_dir)
     os.makedirs(base_path, exist_ok=True)
-    
+
     logging.basicConfig(
         handlers=[
             logging.FileHandler(os.path.join(base_path, 'train_log.log'), mode='a'),
