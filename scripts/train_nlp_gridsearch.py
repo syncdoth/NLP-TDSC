@@ -41,8 +41,8 @@ if __name__ == '__main__':
         'optimizer': 'adam',
         'weight_decay': 0,
         'seed': 2022,
-        'checkpoint_dir': 'saved_models/{}/best.pth',
-        'wandb_runname': {},
+        'checkpoint_dir': f'saved_models/{os.environ['exp_name']}/best.pth',
+        'wandb_runname': os.environ['exp_name'],
         'log_every': 100,
     }
     comb_configs = {
