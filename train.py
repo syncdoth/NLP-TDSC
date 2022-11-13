@@ -137,7 +137,7 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
                     if s == 'anchor':
                         embs_for_clustering[idx] = embs[s].cpu().detach().numpy()  # a non-gradient copy of embs
 
-                    if 'sup' in training_modes:  # TODO: may train for 'anchor' only
+                    if 'sup' in training_modes and s == 'anchor':  # TODO: may train for 'anchor' only
                         logits = model.classifier(embs[s])
                         sup_loss = loss_fn(logits, labels)
                         loss += sup_loss
@@ -154,6 +154,11 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
                 # it is really a "running" acc, i.e. the sum of correct instances.
                 anchor_sample_count += input_ids.size(0)
                 unsup_running_acc += acc(kfactor_batch_label.cpu().numpy(), labels.cpu().numpy()) * labels.shape[0]
+                if 'sup' in training_modes:
+                    # if we are training in unsup|sup mode, control the weight of
+                    # unsupservised loss.
+                    # total_loss = supervised_loss + C * unsupervised_loss
+                    unsup_loss *= args.unsup_loss_final_weight
                 loss += unsup_loss
                 loss.backward()
                 optimizer.step()
@@ -185,6 +190,7 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
                 log_items = {
                     "train running loss": running_loss / sample_count,
                     "LR": last_lr,
+                    "step": i,
                 }
                 if 'unsup' in training_modes:
                     log_items['unsup_loss'] = unsup_loss
@@ -234,6 +240,7 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
             experiment.log({
                 'valid loss': epoch_valid_loss,
                 'valid accuracy': epoch_valid_acc,
+                'epoch': epoch,
             })
 
         # save model and early stopping

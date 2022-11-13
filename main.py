@@ -37,6 +37,8 @@ def options():
             'and "nlp" ~ other pretraining tasks, e.g Mask Token, Next Sentence Prediction')
     parser.add_argument('--unsup_losses_weights', type=str, default='100|1|1',
         help='weights are gamma_0, _1, _2 in Table 3 of the TSDC paper')
+    parser.add_argument('--unsup_loss_final_weight', type=float, default=1.,
+                        help='the final weight of unsupervised loss vs supervised loss')
 
     # data / io related
     parser.add_argument('--dataset_name', type=str, default='sst2')
