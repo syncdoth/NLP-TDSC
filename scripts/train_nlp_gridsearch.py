@@ -22,14 +22,14 @@ def get_runstr_combinations(header='python3 finetune_lm.py', fixed_configs={}, c
         for key, val in zip(key_list, vals):
             tmp_str += ' --'+key+' '+str(val)
         all_runstrs.append(tmp_str)
-    
+
     return all_runstrs
 
 if __name__ == '__main__':
     header = "python3 main.py --verbose --wandb"
     fixed_configs = {
         'model_name_or_path': 'roberta-base',
-        'dataset_name': 'sst2', 
+        'dataset_name': 'sst2',
         'num_sup_labels': 2,
         'num_unsup_clusters': 2,
         'num_factor_per_cluster': 256,
@@ -41,7 +41,7 @@ if __name__ == '__main__':
         'optimizer': 'adam',
         'weight_decay': 0,
         'seed': 2022,
-        'checkpoint_dir': f'saved_models/{os.environ['exp_name']}/best.pth',
+        'checkpoint_dir': f"saved_models/{os.environ['exp_name']}/best.pth",
         'wandb_runname': os.environ['exp_name'],
         'log_every': 100,
     }
@@ -56,5 +56,3 @@ if __name__ == '__main__':
     # for i, runstr in enumerate(all_runstrs):
     #     print(f'[{i+1}/{len(all_runstrs)}]', runstr)
     #     os.system(runstr)
-
-    
