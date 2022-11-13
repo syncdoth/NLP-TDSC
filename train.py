@@ -84,7 +84,6 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
                                                   min_lr=1e-6,
                                                   verbose=True)
 
-    epoch_valid_loss = None
     best_valid_loss = np.inf
     best_valid_acc = 0
 
@@ -211,41 +210,39 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
                                                 random_state=args.seed)
                 clustering.fit(embs_for_clustering)
                 unsup_labels = torch.tensor(clustering.labels_)
+                # TODO: compute clustering acc for spectral
             else:
                 raise NotImplementedError(
                     '--unsup_clustering_method should be one of `kfactor` or `spectral`.')
 
+        epoch_valid_loss, epoch_valid_acc = evaluate(model,
+                                                     tokenized_data['valid'],
+                                                     loss_fn,
+                                                     args,
+                                                     device=device)
         # reduce lr after epoch
         if args.decay_steps > 0:
             lr_decay.step()
         else:  # reduce on plateau, evaluate to keep track of acc in each process
-            epoch_valid_loss, epoch_valid_acc = evaluate(model,
-                                                         tokenized_data['valid'],
-                                                         loss_fn,
-                                                         args,
-                                                         device=device)
             lr_decay.step(epoch_valid_acc)
 
         if args.verbose:  # only validate using process 0
-            if epoch_valid_loss is None:  # check if process 0 already validated
-                epoch_valid_loss, epoch_valid_acc = evaluate(model,
-                                                             tokenized_data['valid'],
-                                                             loss_fn,
-                                                             args,
-                                                             device=device)
-
             logging.info(f'[Train] loss: {epoch_train_loss:.4f} - acc: {epoch_train_acc:.4f} |'
                          f' clustering: {epoch_unsup_acc:.4f} |'
                          f' [Valid] loss: {epoch_valid_loss:.4f} - acc: {epoch_valid_acc:.4f}')
+        if args.wandb:
+            experiment.log({
+                'valid loss': epoch_valid_loss,
+                'valid accuracy': epoch_valid_acc,
+            })
 
-            # save model and early stopping
-            if epoch_valid_acc >= best_valid_acc:
-                best_epoch = epoch + 1
-                best_valid_acc = epoch_valid_acc
-                best_valid_loss = epoch_valid_loss
-                # saving using process (rank) 0 only as all processes are in sync
-                torch.save(model.state_dict(), args.checkpoint_dir)
-            epoch_valid_loss = None  # reset loss
+        # save model and early stopping
+        if epoch_valid_acc >= best_valid_acc:
+            best_epoch = epoch
+            best_valid_acc = epoch_valid_acc
+            best_valid_loss = epoch_valid_loss
+            # saving using process (rank) 0 only as all processes are in sync
+            torch.save(model.state_dict(), args.checkpoint_dir)
 
         gc.collect()  # release unreferenced memory
 
