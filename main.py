@@ -42,6 +42,7 @@ def options():
     parser.add_argument('--dataset_name', type=str, default='sst2')
     parser.add_argument('--checkpoint_dir', type=str, default='saved_models/best.pth',
                         help='where to save the model')
+    parser.add_argument('--load_model_from', type=str, help='load previous model')
     parser.add_argument('--verbose', action='store_true', help='whether to print results a lot')
 
     # training / optimization related
@@ -90,6 +91,9 @@ def main():
     # load model, tokenizer
     model = TdscLanguageModel(args).to(device)
     tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
+
+    if args.load_model_from and os.path.isfile(args.load_model_from):
+        model.load_state_dict(torch.load(args.load_model_from), strict=True)
 
     # load data
     # NOTE: by passing tokenizer into this function, the 'text' field is now
