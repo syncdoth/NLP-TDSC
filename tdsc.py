@@ -6,7 +6,6 @@ Reference: https://github.com/XifengGuo/DSC-Net/blob/master/main.py
 import argparse
 import math
 import os
-from turtle import position
 import warnings
 import tqdm
 
@@ -150,7 +149,7 @@ class TDSCNet(nn.Module):
 
 def tdscnet_train(model, x, y, unsup_label_init_source='random',
                 epochs=10, epochs_update=1, lr=1e-3, weights={'c':1.0,'se':150,'tri':1.0},
-                alpha=0.04, dim_subspace=12, ro=8, 
+                alpha=0.04, dim_subspace=12, ro=8,
                 show=10, device='cuda'):
 
     num_sample = x.shape[0]
