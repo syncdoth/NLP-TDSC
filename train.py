@@ -100,6 +100,10 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
         if 'unsup' in training_modes:
             # create triplet dataset indices D. D has 3 keys, ['anchor', 'pos', 'neg']
             # D['anchor'] should be range(num_training_samples)
+            if len(unsup_labels.unique()) == 1:
+                logging.info("all points are in one cluster! Resetting the clusters..")
+                unsup_labels = torch.empty(num_training_samples,
+                                           dtype=torch.int8).random_(args.num_unsup_clusters)
             D = get_triplet_data(num_training_samples, unsup_labels)
             print('Unsup labels:\n', unsup_labels, '\nTriplet dataset:\n', D)
             embs_for_clustering = np.zeros(
@@ -182,7 +186,7 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
                 running_acc += (logits.argmax(-1) == labels).sum().item()  # num corrects
 
             if args.log_every > 0 and i % args.log_every == 0 and args.wandb:
-                if args.decay_steps > 0:
+                if isinstance(lr_decay, lr_scheduler._LRScheduler) :
                     last_lr = lr_decay.get_last_lr()[0]
                 else:
                     # NOTE: ReduceLROnPlateau do not have this function.
