@@ -194,7 +194,6 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
                 log_items = {
                     "train running loss": running_loss / sample_count,
                     "LR": last_lr,
-                    "step": i,
                 }
                 if 'unsup' in training_modes:
                     log_items['unsup_loss'] = unsup_loss
