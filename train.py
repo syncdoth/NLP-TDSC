@@ -261,5 +261,11 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
                      f'- acc: {best_valid_acc:.4f}')
         logging.info(f'[Test] loss {test_loss:.4f} - acc: {test_acc:.4f}')
 
+        # add result metrics to the summary
+        experiment.summary['best_valid_loss'] = best_valid_loss
+        experiment.summary['best_valid_acc'] = best_valid_acc
+        experiment.summary['test_loss'] = test_loss
+        experiment.summary['test_acc'] = test_acc
+
     if args.wandb:
         wandb.finish()
