@@ -45,7 +45,7 @@ def get_GLUE_datasets(dataset_name='sst2', tokenizer=None, max_seq_length=None):
     """
     from datasets import load_dataset
     from datasets import Dataset
-    if dataset_name in {'sst2', 'mrpc', 'mnli_mismatched'}:
+    if dataset_name in {'sst2', 'mrpc', 'mnli'}:
         glue_dataset = load_dataset("glue", dataset_name)
     elif dataset_name in {'sst5'}:
         glue_dataset = load_dataset("SetFit/sst5")
@@ -106,8 +106,8 @@ def get_GLUE_datasets(dataset_name='sst2', tokenizer=None, max_seq_length=None):
                                     glue_dataset[split_name]['sentence2'])],
                     'label': glue_dataset[split_name]['label']
                 })
-    elif dataset_name == 'mnli_mismatched':
-        for split_name in glue_dataset:
+    elif dataset_name == 'mnli':
+        for split_name in ['train', 'validation_mismatched']:
             if tokenizer is not None:
                 dataset[split_name] = {
                     'text': tokenizer([' '.join(sent_pair) for sent_pair in \
@@ -126,6 +126,7 @@ def get_GLUE_datasets(dataset_name='sst2', tokenizer=None, max_seq_length=None):
                                     glue_dataset[split_name]['hypothesis'])],
                     'label': glue_dataset[split_name]['label']
                 })
+        dataset['valid'] = dataset.pop('validation_mismatched')
     else:
         raise TypeError(f'{dataset_name} is a wrong dataset name!')
     return dataset
