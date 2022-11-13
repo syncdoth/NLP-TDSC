@@ -90,7 +90,8 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
 
     if args.wandb:
         if not args.wandb_runname:
-            args.wandb_runname = f'{args.mode}-{round(time.time() * 1000)}'
+            # args.wandb_runname = f'{args.mode}-{round(time.time() * 1000)}'
+            args.wandb_runname = None
         experiment = wandb.init(entity='syncdoth',
                                 project='NLP-TDSC',
                                 name=args.wandb_runname,

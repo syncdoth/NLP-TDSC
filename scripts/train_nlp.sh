@@ -19,7 +19,9 @@ python main.py \
     --seed 2022 \
     --checkpoint_dir "saved_models/$exp_name/best.pth" \
     --verbose \
-    --wandb --wandb_project NLP-TDSC --wandb_runname $exp_name \
+    --wandb \
+    # --wandb_project NLP-TDSC \
+    --wandb_runname $exp_name \
     --log_every 100
 
     # --linear_decay
