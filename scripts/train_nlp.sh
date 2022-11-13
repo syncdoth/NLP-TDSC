@@ -21,5 +21,5 @@ python main.py \
     --verbose \
     --wandb \
     --wandb_runname $exp_name \
-    --log_every 50
+    --log_every 100
     # --linear_decay
