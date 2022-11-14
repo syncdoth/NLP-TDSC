@@ -102,7 +102,8 @@ def main():
     # tokenized text.
     data = get_GLUE_datasets(dataset_name=args.dataset_name,
                              tokenizer=tokenizer,
-                             max_seq_length=args.max_seq_length)
+                             max_seq_length=args.max_seq_length,
+                             seed=args.seed)
 
     # NOTE by Jiayang: The following is unnecessary anymore, since the new data.py 
     # takes care of the preprocessing, so that sst2, sst5, and mnli-mismatched have
