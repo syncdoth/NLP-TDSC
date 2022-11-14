@@ -38,7 +38,7 @@ def get_MNIST_dataloaders(MNIST_data, train_valid_split=(50000, 10000),
 
     return data_loaders
 
-def get_GLUE_datasets(dataset_name='sst2', tokenizer=None, max_seq_length=None):
+def get_GLUE_datasets(dataset_name='sst2', tokenizer=None, max_seq_length=None, seed=2022):
     """ Retrieve the given NLP dataset from the GLUE collection.
     See this webpage for dataset descriptions:
     https://huggingface.co/datasets/glue
@@ -48,43 +48,74 @@ def get_GLUE_datasets(dataset_name='sst2', tokenizer=None, max_seq_length=None):
     if dataset_name in {'sst2', 'mrpc', 'mnli'}:
         glue_dataset = load_dataset("glue", dataset_name)
     elif dataset_name in {'sst5'}:
-        glue_dataset = load_dataset("SetFit/sst5")
+        glue_dataset = load_dataset("sst", 'default')
     glue_dataset = dict(glue_dataset)
     # preprocess, normalize the column name into 'text' and 'label' for each split
     # Currently support: sst2, MRPC, MNLI-mismatched, (To-Add SST5)
 
     dataset = {}
     if dataset_name == 'sst2':
-        for split_name in glue_dataset:
+        # Pre-processing sst2: re-purpose the validation as the test; 
+        # and split a portion from the train as valid
+        sst2_dataset = {}
+        sst2_dataset['test'] = glue_dataset['validation']
+
+        train_valid = glue_dataset['train'].train_test_split(0.013, seed=seed) # keep 876 items in the new validation set (v.s. 872 in the original)
+        sst2_dataset['train'] = train_valid['train']
+        sst2_dataset['valid'] = train_valid['test']
+
+        for split_name in sst2_dataset:
             if tokenizer is not None:
                 dataset[split_name] = {
-                    'text': tokenizer(glue_dataset[split_name]['sentence'],
+                    'text': tokenizer(sst2_dataset[split_name]['sentence'],
                                       padding='max_length',
                                       max_length=max_seq_length,
                                       return_tensors='pt',
                                       truncation=True),
-                    'label': torch.LongTensor(glue_dataset[split_name]['label']),
+                    'label': torch.LongTensor(sst2_dataset[split_name]['label']),
                 }
             else:
                 dataset[split_name] = Dataset.from_dict({
-                    'text': glue_dataset[split_name]['sentence'],
-                    'label': glue_dataset[split_name]['label'],
+                    'text': sst2_dataset[split_name]['sentence'],
+                    'label': sst2_dataset[split_name]['label'],
                 })
+
     elif dataset_name == 'sst5':
-        for split_name in glue_dataset:
+        # Pre-processing sst5: rename the validation -> valid
+        # discretize labels 
+        sst5_dataset = {}
+        sst5_dataset['train'] = glue_dataset['train']
+        sst5_dataset['valid'] = glue_dataset['validation']
+        sst5_dataset['test'] = glue_dataset['test']
+        def discretize(label_list):
+            new_label_list = []
+            for lbl in label_list:
+                if lbl < 0.2:
+                    new_label_list.append(0)
+                elif lbl >= 0.2 and lbl < 0.4:
+                    new_label_list.append(1)
+                elif lbl >= 0.4 and lbl < 0.6:
+                    new_label_list.append(2)
+                elif lbl >= 0.6 and lbl < 0.8:
+                    new_label_list.append(3)
+                else:
+                    new_label_list.append(4)
+            return new_label_list
+
+        for split_name in sst5_dataset:
             if tokenizer is not None:
                 dataset[split_name] = {
-                    'text': tokenizer(glue_dataset[split_name]['text'],
+                    'text': tokenizer(sst5_dataset[split_name]['sentence'],
                                       padding='max_length',
                                       max_length=max_seq_length,
                                       return_tensors='pt',
                                       truncation=True),
-                    'label': torch.LongTensor(glue_dataset[split_name]['label']),
+                    'label': torch.LongTensor(discretize(sst5_dataset[split_name]['label'])),
                 }
             else:
                 dataset[split_name] = Dataset.from_dict({
-                    'text': glue_dataset[split_name]['text'],
-                    'label': glue_dataset[split_name]['label'],
+                    'text': sst5_dataset[split_name]['sentence'],
+                    'label': discretize(sst5_dataset[split_name]['label']),
                 })
     elif dataset_name == 'mrpc':
         for split_name in glue_dataset:
@@ -107,26 +138,32 @@ def get_GLUE_datasets(dataset_name='sst2', tokenizer=None, max_seq_length=None):
                     'label': glue_dataset[split_name]['label']
                 })
     elif dataset_name == 'mnli':
-        for split_name in ['train', 'validation_mismatched']:
+        # re-purpose valid set as the test set, and split a new valid set for validation
+        mnli_mismatched_dataset = {}
+        train_valid = glue_dataset['train'].train_test_split(0.025, seed=seed)  # leave out 9818 instances for validation
+        mnli_mismatched_dataset['train'], mnli_mismatched_dataset['valid'] = train_valid['train'], train_valid['test']
+        mnli_mismatched_dataset['test'] = glue_dataset['validation_mismatched']
+
+        for split_name in mnli_mismatched_dataset:
             if tokenizer is not None:
                 dataset[split_name] = {
                     'text': tokenizer([' '.join(sent_pair) for sent_pair in \
-                                            zip(glue_dataset[split_name]['premise'], 
-                                                glue_dataset[split_name]['hypothesis'])],
+                                            zip(mnli_mismatched_dataset[split_name]['premise'], 
+                                                mnli_mismatched_dataset[split_name]['hypothesis'])],
                                         padding='max_length',
                                         max_length=max_seq_length,
                                         return_tensors='pt',
                                         truncation=True),
-                    'label': torch.LongTensor(glue_dataset[split_name]['label']),
+                    'label': torch.LongTensor(mnli_mismatched_dataset[split_name]['label']),
                 }
             else:
                 dataset[split_name] = Dataset.from_dict({
                     'text': [' '.join(sent_pair) for sent_pair in \
-                                zip(glue_dataset[split_name]['premise'], 
-                                    glue_dataset[split_name]['hypothesis'])],
-                    'label': glue_dataset[split_name]['label']
+                                zip(mnli_mismatched_dataset[split_name]['premise'], 
+                                    mnli_mismatched_dataset[split_name]['hypothesis'])],
+                    'label': mnli_mismatched_dataset[split_name]['label']
                 })
-        dataset['valid'] = dataset.pop('validation_mismatched')
+
     else:
         raise TypeError(f'{dataset_name} is a wrong dataset name!')
     return dataset

@@ -103,10 +103,14 @@ def main():
     data = get_GLUE_datasets(dataset_name=args.dataset_name,
                              tokenizer=tokenizer,
                              max_seq_length=args.max_seq_length)
-    if 'valid' not in data.keys() and 'validation' in data.keys():
-        data['valid'] = data.pop('validation')
-    if 'test' not in data.keys() or args.dataset_name == 'sst2':
-        data['test'] = data['valid']
+
+    # NOTE by Jiayang: The following is unnecessary anymore, since the new data.py 
+    # takes care of the preprocessing, so that sst2, sst5, and mnli-mismatched have
+    # train/valid/test split properly set up.
+    # if 'valid' not in data.keys() and 'validation' in data.keys():
+    #     data['valid'] = data.pop('validation')
+    # if 'test' not in data.keys() or args.dataset_name == 'sst2':
+    #     data['test'] = data['valid']
 
     # TODO: add more init & control here
     loss_fn = torch.nn.CrossEntropyLoss()  # TODO: change loss_fn.
