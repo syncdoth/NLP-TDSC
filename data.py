@@ -3,43 +3,45 @@
 
 import torch
 from torchvision import datasets, transforms
+import numpy as np
 
-def get_MNIST_datasets(data_path="./data/", transform=None):
-    """ Retrieve the MNIST data. (which DO NOT have a validation set)
-    This function will automatically download MNIST data under the ``data_path'' folder.
-    The default tranform for the images are used if transform is specified as None.
-    """
-    if transform is None:
-        # Normalize with the global mean and standard deviation of the MNIST dataset
-        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=[0.1307],std=[0.3081])])
+from IPython import embed
 
-    data_train = datasets.MNIST(root=data_path, transform=transform, train=True, download=True)
-    data_test = datasets.MNIST(root=data_path, transform=transform, train=False, download=True)
-    return {'train': data_train, 'test': data_test}
+import scipy.io as sio
 
-def get_MNIST_dataloaders(MNIST_data, train_valid_split=(50000, 10000), batch_size=32, seed=2022, num_workers=4):
+def get_MNIST_dataloaders(data_path, data_num=-1, seed=1):
     """ Get MNIST dataloaders, including splitting the original train set into train and validation sets.
     """
-    train_data, valid_data = torch.utils.data.random_split(MNIST_data['train'], train_valid_split, 
-                                                            generator=torch.Generator().manual_seed(seed))
-    test_data = MNIST_data['test']
+    train_data = datasets.MNIST(root=data_path, transform=None, train=True, download=True)
 
-    data_loaders = {
-        'train': torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=num_workers),
-        'valid': torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, num_workers=num_workers),
-        'test': torch.utils.data.DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=num_workers),
+    if data_num < 0:
+        data_num = train_data.data.size(0)
+
+    np.random.seed(seed)
+    train_data_indices = torch.Tensor(np.random.choice(train_data.data.size(0), data_num, replace=False)).long()
+
+    Datasets = {
+        'data': train_data.data[train_data_indices].float(),
+        'label': train_data.targets[train_data_indices],
     }
 
-    return data_loaders
+    return Datasets
+
+def get_coil20_dataset(data_path):
+
+    data = sio.loadmat(f'{data_path}/COIL20.mat')
+    x, y = data['fea'].reshape((-1, 32, 32)), data['gnd']
+    y = np.squeeze(y - 1)  # y in [0, 1, ..., K-1]
+
+    Dataset = {
+        'data': torch.Tensor(x).float(),
+        'label': torch.Tensor(y).long() 
+    }
+
+    return Dataset
+
 
 if __name__ == '__main__':
-    # Get MNIST dataset
-    MNIST_data = get_MNIST_datasets()
-    print(MNIST_data)
 
-    # Get dataloaders, note that here you need to specify the train/valid split ratio, batch_size, 
-    # and also don't forget to change the seed
-    MNIST_loaders = get_MNIST_dataloaders(MNIST_data, [50000, 10000], 32, 2022, 2)
-    for batch in MNIST_loaders['train']:
-        print(batch[0].size(), batch[1].size())
-        break
+    dataset = get_coil20_dataset('./data')
+    embed()
