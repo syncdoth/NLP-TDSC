@@ -157,7 +157,7 @@ def train(model: nn.Module, tokenized_data, loss_fn, args, device='cpu'):
                 # since acc function divides by sample size, multiply it back so that
                 # it is really a "running" acc, i.e. the sum of correct instances.
                 anchor_sample_count += input_ids.size(0)
-                unsup_running_acc += acc(kfactor_batch_label.cpu().numpy(), labels.cpu().numpy()) * labels.shape[0]
+                unsup_running_acc += acc(labels.cpu().numpy(), kfactor_batch_label.cpu().numpy()) * labels.shape[0]
                 if 'sup' in training_modes:
                     # if we are training in unsup|sup mode, control the weight of
                     # unsupservised loss.

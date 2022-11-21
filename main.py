@@ -7,12 +7,13 @@ import os
 
 import torch
 from transformers import AutoTokenizer
+import numpy as np
 
 from data import get_GLUE_datasets
 from model import TdscLanguageModel
 from train import train
 from util import set_random_seeds
-
+from unsup_baseline import unsup_baseline
 
 def options():
     """
@@ -39,6 +40,7 @@ def options():
         help='weights are gamma_0, _1, _2 in Table 3 of the TSDC paper')
     parser.add_argument('--unsup_loss_final_weight', type=float, default=1.,
                         help='the final weight of unsupervised loss vs supervised loss')
+    parser.add_argument('--get_unsupervised_baseline', action='store_true')
 
     # data / io related
     parser.add_argument('--dataset_name', type=str, default='sst2')
@@ -105,14 +107,20 @@ def main():
                              max_seq_length=args.max_seq_length,
                              seed=args.seed)
 
-    # NOTE by Jiayang: The following is unnecessary anymore, since the new data.py 
+    # NOTE by Jiayang: The following is unnecessary anymore, since the new data.py
     # takes care of the preprocessing, so that sst2, sst5, and mnli-mismatched have
     # train/valid/test split properly set up.
     # if 'valid' not in data.keys() and 'validation' in data.keys():
     #     data['valid'] = data.pop('validation')
     # if 'test' not in data.keys() or args.dataset_name == 'sst2':
     #     data['test'] = data['valid']
-
+    if args.get_unsupervised_baseline:
+        test_accuracy, train_accuracy, hidden_states, cluster_label = unsup_baseline(model, data, args, device=device)
+        logging.info(f'unsupervised baseline (spectral clustering): '
+                     f'test set: {test_accuracy} | train set {train_accuracy}')
+        np.save(os.path.join(base_path, 'hidden_states.npy'), hidden_states)
+        np.save(os.path.join(base_path, 'cluster_label.npy'), cluster_label)
+        return
     # TODO: add more init & control here
     loss_fn = torch.nn.CrossEntropyLoss()  # TODO: change loss_fn.
     train(model, data, loss_fn, args, device=device)
