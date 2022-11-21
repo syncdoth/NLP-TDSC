@@ -161,5 +161,5 @@ cython_debug/
 .vscode/
 
 data
-pretrained*
+pretrain*
 _output_*

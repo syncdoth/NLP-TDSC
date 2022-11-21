@@ -1,10 +1,6 @@
 """
 implementation of the training loop.
 """
-import gc
-import logging
-import time
-from typing import Dict
 
 import numpy as np
 import torch
@@ -15,7 +11,6 @@ from tqdm import tqdm
 from util import acc, spectral_clustering, save_model
 from sklearn.cluster import KMeans
 
-from IPython import embed
 import os
 
 
@@ -58,13 +53,13 @@ def train(model,
 
     # initialize cluster_module
    
-
     z_rec = []
     with torch.no_grad():
         for i in range(0, args.data_num, args.batch_size):
             inputs = data_train[i:i+args.batch_size].unsqueeze(dim=1).to(device)
-            inputs /= inputs.max()
-            inputs = F.interpolate(inputs, size=(inputs.size(-1)//8) * 8, mode='bilinear', align_corners=True)
+            # inputs /= inputs.max()
+            if inputs.size(-1)//8 != 0: 
+                inputs = F.interpolate(inputs, size=(inputs.size(-1)//8) * 8, mode='bilinear', align_corners=True)
             z = model.encoder(inputs)
             z_rec.append(z.reshape(z.size(0), -1))
         
@@ -81,7 +76,7 @@ def train(model,
         with torch.no_grad():
             _, _, preds2 = model.cluster_m(Zs)
         
-        print(f'Acc after initialization: {acc(preds2.cpu().numpy(), label_train.numpy()):.03f}')
+        # print(f'Acc after initialization: {acc(preds2.cpu().numpy(), label_train.numpy()):.03f}')
 
         predictions = preds2
 
@@ -120,8 +115,9 @@ def train(model,
         for i in range(0, args.data_num, args.batch_size):
             batch_indices = indices[i:i+args.batch_size]
             inputs = data_train[batch_indices].unsqueeze(dim=1).to(device)
-            inputs /= inputs.max()
-            inputs = F.interpolate(inputs, size=(inputs.size(-1)//8) * 8, mode='bilinear', align_corners=True)
+            # inputs /= inputs.max()
+            if inputs.size(-1)//8 != 0: 
+                inputs = F.interpolate(inputs, size=(inputs.size(-1)//8) * 8, mode='bilinear', align_corners=True)
             labels = label_train[batch_indices]
 
             xhat, subspace_loss, _, z = model(inputs, args.loss_type == 'triplet')
@@ -164,8 +160,9 @@ def train(model,
             with torch.no_grad():
                 for i in range(0, args.data_num, args.batch_size):
                     inputs = data_train[i:i+args.batch_size].unsqueeze(dim=1).to(device)
-                    inputs /= inputs.max()
-                    inputs = F.interpolate(inputs, size=(inputs.size(-1)//8) * 8, mode='bilinear', align_corners=True)
+                    # inputs /= inputs.max()
+                    if inputs.size(-1) % 8 != 0:
+                        inputs = F.interpolate(inputs, size=(inputs.size(-1)//8) * 8, mode='bilinear', align_corners=True)
                     z = model.encoder(inputs)
                     z_rec.append(z.reshape(inputs.size(0), -1))
                     _, _, preds = model.cluster_m(z.view(inputs.size(0), -1))
@@ -175,11 +172,11 @@ def train(model,
                 Preds = torch.cat(preds_rec, dim=0)
 
                 model.cluster_m.upadte_D(Zs, Preds)
-                pbar.set_description(f"training loss:{epoch_train_loss:.04f}, acc: {acc(Preds.cpu().numpy(), label_train.numpy()):.03f}")
+                pbar.set_description(f"training loss:{epoch_train_loss:.3e}, acc: {acc(Preds.cpu().numpy(), label_train.numpy()):.03f}")
         else:
-            pbar.set_description(f"training loss:{epoch_train_loss:.04f}")
+            pbar.set_description(f"training loss:{epoch_train_loss:.3e}")
 
-        lr_decay.step()
+        # lr_decay.step()
         pbar.update()
 
         if epoch % args.screen_epoch == 0:
@@ -193,7 +190,7 @@ def train(model,
             C = (model.cluster_m.C * model.cluster_m.mask).data.cpu().numpy()
             y_pred = spectral_clustering(C, args.cluster_num, args.dim_subspace, args.alpha, args.rho)
 
-            print( f'Epoch: {epoch}, loss: {epoch_train_loss:.3f}, acc: {acc(y_pred, label_train.numpy()):.3f}.')
+            print( f'Epoch: {epoch}, loss: {epoch_train_loss:.3e}, acc: {acc(y_pred, label_train.numpy()):.3f}.')
 
     save_model(model, f'{args.pretrain_weights}/{args.data_type}.ckpt')
     

@@ -27,7 +27,7 @@ def options():
     parser.add_argument('--n_epochs', type=int, default=400, help='number of times to train')
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--optimizer', type=str, default='adam', choices=['adam', 'sgd'])
-    parser.add_argument('--weight_decay', type=float, default=1e-4)
+    parser.add_argument('--weight_decay', type=float, default=0.0)
     parser.add_argument('--lr', type=float, default=1e-3, help='the learning rate')
     parser.add_argument('--gamma0', type=float, default=1.0)
     parser.add_argument('--gamma1', type=float, default=1.0)
@@ -63,23 +63,31 @@ def main():
         os.makedirs(args.pretrain_weights, exist_ok=True)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    
 
     if args.data_type == 'mnist':
         dataloaders = get_MNIST_dataloaders('./data', data_num=args.data_num, seed=args.seed)
         if args.data_num < 0:
             args.data_num = dataloaders['data'].size(0)
+        args.cluster_num = 10
+        kernels = [5, 3, 3]
+        channels = [1, 20, 10, 5]
+        
     elif args.data_type == 'coil20': 
         dataloaders = get_coil20_dataset('./data')
         args.data_num = dataloaders['data'].size(0) 
-    
+        args.cluster_num = 20
+        kernels = [3]
+        channels = [1, 15]
+        
     if args.batch_size < 0:
         args.batch_size = args.data_num
 
-    encoder, decoder = create_ae(kernels=[5, 3, 3], channels=[1, 20, 10, 5])
+    encoder, decoder = create_ae(kernels=kernels, channels=channels)
     if args.sc_type == 'spectral':
         cluster_m = self_exp(size=args.data_num, gamma0=args.gamma0, gamma1=args.gamma1)
     elif args.sc_type == 'kfactor':
-        cluster_m = Kfactor(cluster_num=args.cluster_num, factor_dim=(dataloaders['data'].size(-1)//8)**2 *5, factor_num_per_cluster=args.dim_subspace, gamma1=args.gamma1)
+        cluster_m = Kfactor(cluster_num=args.cluster_num, factor_dim=(dataloaders['data'].size(-1)//(2**len(kernels)))**2 * channels[-1], factor_num_per_cluster=args.dim_subspace, gamma1=args.gamma1)
     model = SCNet(encoder, decoder, cluster_m, pretrain=args.initialize)
     model = model.to(device)
     print(args)
